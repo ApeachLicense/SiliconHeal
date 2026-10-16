@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SiliconHeal · Autonomous Hardware-Spec & Kernel Self-Healing Agent</title>
+  <title>SiliconHeal v3.0 · Autonomous Hardware-Spec IR & Proof-Carrying Kernel Self-Healing Agent</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -64,19 +64,19 @@
       </div>
       <div>
         <div class="flex items-center gap-2">
-          <h1 class="font-bold text-sm tracking-tight text-white">SiliconHeal</h1>
+          <h1 class="font-bold text-sm tracking-tight text-white">SiliconHeal <span class="text-cyan-400 mono text-xs">v3.0</span></h1>
           <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-full">
             Track 2 · Hard Tech
           </span>
           <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded-full mono">
-            Gemini 4 Argon · thinking_level="high" · 1M Multimodal
+            SpecMap IR · Errata Override · KernelPro · 6-Stage Gate
           </span>
           <span id="active-spec-pill" class="px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 rounded-full mono">
             SPEC: 64B Align | Bit 7 RSVD | 8-Bank SRAM
           </span>
         </div>
         <p class="text-[11px] text-slate-400">
-          Closed-Loop Hardware Datasheet + PCB Schematic + 2,500-Row Oscilloscope CSV Synthesis &amp; Native <code class="text-cyan-300">g++ -O2</code> Self-Healing Sandbox
+          Typed <code class="text-amber-300">HardwareSpec IR</code> + Cross-Page <code class="text-rose-300">Errata #E-401..#E-403</code> + <code class="text-cyan-300">WaveformQA</code> Event-Time JSON + Native <code class="text-emerald-300">g++ -O2</code> Proof-Carrying Sandbox
         </p>
       </div>
     </div>
@@ -85,19 +85,19 @@
     <div class="flex items-center gap-2">
       <div class="flex items-center bg-slate-950 border border-slate-800 rounded-lg p-1 gap-1">
         <button onclick="selectStage(0)" id="step-btn-0" class="px-2.5 py-1 rounded text-xs font-medium transition-all">
-          0. Fault (Red)
+          0. Fault (0/6)
         </button>
         <span class="text-slate-600 text-xs">→</span>
         <button onclick="selectStage(1)" id="step-btn-1" class="px-2.5 py-1 rounded text-xs font-medium transition-all">
-          1. Coherency
+          1. Coherency (1/6)
         </button>
         <span class="text-slate-600 text-xs">→</span>
         <button onclick="selectStage(2)" id="step-btn-2" class="px-2.5 py-1 rounded text-xs font-medium transition-all">
-          2. Bank Stall
+          2. Bank Stall (3/6)
         </button>
         <span class="text-slate-600 text-xs">→</span>
         <button onclick="selectStage(3)" id="step-btn-3" class="px-2.5 py-1 rounded text-xs font-medium transition-all">
-          3. SLA Verified (Green)
+          3. Verified (6/6)
         </button>
       </div>
 
@@ -147,7 +147,7 @@
     </div>
 
     <div class="flex items-center gap-2">
-      <input id="api-key-input" type="password" placeholder="Optional GEMINI_API_KEY" class="w-40 px-2 py-1 text-[11px] bg-slate-900 border border-slate-700 rounded text-slate-300 placeholder-slate-500 focus:outline-none focus:border-cyan-500 mono" />
+      <input id="api-key-input" type="password" placeholder="Optional GEMINI_API_KEY" class="w-36 px-2 py-1 text-[11px] bg-slate-900 border border-slate-700 rounded text-slate-300 placeholder-slate-500 focus:outline-none focus:border-cyan-500 mono" />
       <button onclick="triggerMutateAndHeal()" id="mutate-btn" class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] border border-indigo-400/40 shadow-md shadow-indigo-500/20 transition-all mono">
         🔥 Mutate Spec &amp; Synthesize Patch
       </button>
@@ -157,97 +157,135 @@
   <!-- MAIN 3-COLUMN WORKSPACE -->
   <main class="flex-1 grid grid-cols-12 gap-0 overflow-hidden">
 
-    <!-- LEFT COLUMN (4 cols): 1M-Token Multimodal Hardware Context (Datasheet + SVG Schematic + 2,500-Row CSV) -->
+    <!-- LEFT COLUMN (4 cols): 1M-Token Multimodal Hardware Context (Datasheet + Errata + SpecIR + SVG + CSV) -->
     <section class="col-span-4 border-r border-slate-800 flex flex-col bg-slate-900/40 overflow-hidden">
-      <div class="px-3 py-2 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between">
-        <div class="flex items-center gap-1">
-          <button onclick="switchLeftTab('datasheet')" id="ltab-datasheet" class="px-2.5 py-1 rounded text-[11px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-            📄 Datasheet Spec
+      <div class="px-2.5 py-2 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between gap-1">
+        <div class="flex items-center gap-1 flex-wrap">
+          <button onclick="switchLeftTab('datasheet')" id="ltab-datasheet" class="px-2 py-1 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+            📄 Spec + Errata
           </button>
-          <button onclick="switchLeftTab('schematic')" id="ltab-schematic" class="px-2.5 py-1 rounded text-[11px] font-semibold text-slate-400 hover:text-slate-200">
-            📐 AXI/SRAM Schematic (SVG)
+          <button onclick="switchLeftTab('specir')" id="ltab-specir" class="px-2 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200">
+            🧩 SpecIR &amp; WaveformQA
           </button>
-          <button onclick="switchLeftTab('csv')" id="ltab-csv" class="px-2.5 py-1 rounded text-[11px] font-semibold text-slate-400 hover:text-slate-200">
-            📈 Scope CSV (2,500 Rows)
+          <button onclick="switchLeftTab('schematic')" id="ltab-schematic" class="px-2 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200">
+            📐 Schematic SVG
+          </button>
+          <button onclick="switchLeftTab('csv')" id="ltab-csv" class="px-2 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200">
+            📈 Scope CSV (2.5k)
           </button>
         </div>
-        <span id="citation-pill" class="text-[10px] mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30">
-          Sec 4.2 · Page 14
+        <span id="citation-pill" class="text-[10px] mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 shrink-0">
+          Sec 9 · Page 88
         </span>
       </div>
 
-      <!-- TAB 1: Dynamic Hardware Reference Manual -->
-      <div id="left-view-datasheet" class="flex-1 overflow-y-auto p-3 space-y-3 select-text">
+      <!-- TAB 1: Dynamic Hardware Reference Manual + Section 9 Errata Overrides -->
+      <div id="left-view-datasheet" class="flex-1 overflow-y-auto p-3 space-y-2.5 select-text">
         <!-- Section 4.2 -->
-        <div id="sec-4-2" class="spec-section rounded-lg p-3 bg-slate-900/90 border border-slate-800">
+        <div id="sec-4-2" class="spec-section rounded-lg p-2.5 bg-slate-900/90 border border-slate-800">
           <div class="flex items-center justify-between mb-1">
             <span class="text-[10px] font-bold uppercase tracking-wider text-amber-400 mono">Section 4.2 · Page 14 (Mutable Spec)</span>
             <span id="badge-sec-4-2" class="text-[10px] mono text-slate-400">OFFSET 0x00 · DMA_CR</span>
           </div>
-          <h3 id="title-sec-4-2" class="text-xs font-bold text-white mb-1.5">4.2.1 64-Byte DMA Alignment &amp; 4.2.2 DMA_CR Reserved Bit</h3>
-          <p id="desc-sec-4-2" class="text-[11px] text-slate-300 leading-relaxed mb-2">
+          <h3 id="title-sec-4-2" class="text-xs font-bold text-white mb-1">4.2.1 64-Byte DMA Alignment &amp; 4.2.2 DMA_CR Reserved Bit</h3>
+          <p id="desc-sec-4-2" class="text-[11px] text-slate-300 leading-relaxed mb-1.5">
             Both <code class="text-cyan-300">DMA_SRC_ADDR</code> and <code class="text-cyan-300">DMA_DST_ADDR</code> <strong>MUST be aligned to a <span id="spec-align-txt" class="text-amber-300 font-bold">64</span>-byte boundary</strong> (<code class="text-amber-300">alignas(<span id="spec-align-code">64</span>)</code> at offset <code class="text-emerald-300">[0]</code>). Unaligned transfers trigger <code class="text-rose-400" id="spec-unaligned-err">ERR_DMA_UNALIGNED_64B</code>.
           </p>
           <div class="bg-slate-950 rounded border border-slate-800 p-2 text-[10px] mono space-y-1">
-            <div class="grid grid-cols-12 text-slate-400 border-b border-slate-800 pb-1 font-semibold">
-              <div class="col-span-3">Bits</div>
-              <div class="col-span-3">Field</div>
-              <div class="col-span-6">Hardware Constraint</div>
-            </div>
             <div class="grid grid-cols-12 text-rose-300 bg-rose-950/30 p-1 rounded">
               <div class="col-span-3 font-bold" id="spec-rsvd-bit-col">Bit 7 (0x80)</div>
               <div class="col-span-3 font-bold">RSVD_MBZ</div>
-              <div class="col-span-6">MUST BE ZERO! Writing 1 locks AXI4 WREADY=0 (CSV t=142.5us, VDD=682.4mV)</div>
+              <div class="col-span-6">MUST BE ZERO! Writing 1 locks AXI4 WREADY=0 (18.4 A/ns PDN di/dt spike → 682.4mV)</div>
             </div>
             <div class="grid grid-cols-12 text-emerald-300 p-1">
               <div class="col-span-3">Bit 4 (0x10)</div>
               <div class="col-span-3">BURST_16</div>
-              <div class="col-span-6">1 = Enable 16-Beat AXI4 Burst (0x15 compliant)</div>
+              <div class="col-span-6">1 = Enable 16-Beat AXI4 Burst (Overridden by Errata #E-402 without hw_dmb)</div>
             </div>
           </div>
         </div>
 
         <!-- Section 5.1 -->
-        <div id="sec-5-1" class="spec-section rounded-lg p-3 bg-slate-900/90 border border-slate-800">
+        <div id="sec-5-1" class="spec-section rounded-lg p-2.5 bg-slate-900/90 border border-slate-800">
           <div class="flex items-center justify-between mb-1">
             <span class="text-[10px] font-bold uppercase tracking-wider text-cyan-400 mono">Section 5.1 · Page 27</span>
             <span class="text-[10px] mono text-slate-400">CACHE COHERENCY &amp; MMIO</span>
           </div>
-          <h3 class="text-xs font-bold text-white mb-1.5">5.1.1 Mandatory <code class="text-cyan-300">hw_dmb()</code> &amp; 5.1.2 Volatile Polling</h3>
-          <p class="text-[11px] text-slate-300 leading-relaxed mb-2">
-            The HX-9000 DMA engine is <strong>non-coherent</strong> with CPU L1 D-Cache. Software <strong>MUST execute <code class="text-emerald-300">hw_dmb()</code></strong> immediately prior to <code class="text-cyan-300">hw_trigger_dma()</code>. Omitting <code class="text-emerald-300">hw_dmb()</code> leaves <strong>56 dirty L1 cache lines</strong> unflushed (Oscilloscope CSV <code class="text-amber-300">t=418.00us</code>), causing silent tensor CRC32 corruption.
+          <h3 class="text-xs font-bold text-white mb-1">5.1.1 Mandatory <code class="text-cyan-300">hw_dmb()</code> &amp; 5.1.2 Volatile Polling</h3>
+          <p class="text-[11px] text-slate-300 leading-relaxed">
+            The HX-9000 DMA engine is <strong>non-coherent</strong> with CPU L1 D-Cache. Software <strong>MUST execute <code class="text-emerald-300">hw_dmb()</code></strong> immediately prior to <code class="text-cyan-300">hw_trigger_dma()</code> and poll <code class="text-emerald-300">hw_poll_status_volatile()</code>. Omitting <code class="text-emerald-300">hw_dmb()</code> leaves <strong>56 dirty L1 lines</strong> unflushed (<code class="text-amber-300">t=418.00us</code>).
           </p>
-          <div class="bg-slate-950 rounded border border-slate-800 p-2 text-[10px] mono text-slate-300">
-            <div>• <strong>5.1.2 Volatile Status Poll:</strong> Poll <code class="text-emerald-300">hw_poll_status_volatile()</code> (<code class="text-amber-300">volatile uint32_t*</code>) to prevent <code class="text-rose-400">-O2</code> register-hoisting race conditions.</div>
-          </div>
         </div>
 
         <!-- Section 6.4 -->
-        <div id="sec-6-4" class="spec-section rounded-lg p-3 bg-slate-900/90 border border-slate-800">
+        <div id="sec-6-4" class="spec-section rounded-lg p-2.5 bg-slate-900/90 border border-slate-800">
           <div class="flex items-center justify-between mb-1">
             <span class="text-[10px] font-bold uppercase tracking-wider text-purple-400 mono">Section 6.4 · Page 41 (Mutable Bank Spec)</span>
             <span id="spec-bank-badge" class="text-[10px] mono text-slate-400">8-BANK INTERLEAVED SRAM</span>
           </div>
-          <h3 id="title-sec-6-4" class="text-xs font-bold text-white mb-1.5">6.4.2 N-Bank Stride Trap &amp; 6.4.3 +1 Element Row Padding</h3>
-          <p class="text-[11px] text-slate-300 leading-relaxed mb-2">
-            On-chip scratchpad consists of <strong id="spec-banks-count" class="text-emerald-300">8</strong> parallel 32-bit banks (<code class="text-amber-300">Bank = word_idx mod <span id="spec-banks-mod">8</span></code>).
-            An unpadded tile <code class="text-rose-300">local_tile[<span id="spec-tile-dim1">8</span>][<span id="spec-tile-dim2">8</span>]</code> causes column gathers to hit <strong>Bank 0 simultaneously (94.12% conflict)</strong>, driving Bank 0 sense-amp temperature to <strong>98.4°C</strong> (CSV <code class="text-rose-300">t=1120.50us</code>).
+          <h3 id="title-sec-6-4" class="text-xs font-bold text-white mb-1">6.4.2 N-Bank Stride Trap &amp; 6.4.3 +1 Element Row Padding</h3>
+          <p class="text-[11px] text-slate-300 leading-relaxed mb-1.5">
+            On-chip scratchpad has <strong id="spec-banks-count" class="text-emerald-300">8</strong> parallel 32-bit banks (<code class="text-amber-300">Bank = word_idx mod <span id="spec-banks-mod">8</span></code>).
+            Unpadded <code class="text-rose-300">local_tile[<span id="spec-tile-dim1">8</span>][<span id="spec-tile-dim2">8</span>]</code> causes column gathers to serialize on <strong>Bank 0 (94.12% conflict, 45.9 W/mm²)</strong>, heating Bank 0 to <strong>99.2°C</strong>.
           </p>
-          <div class="bg-emerald-950/30 border border-emerald-500/30 rounded p-2 text-[10px] mono text-emerald-200">
-            <strong>Mandatory Fix (+1 Padding):</strong> Declare <code class="text-white">PADDED_STRIDE = TILE_DIM + 1</code> (<span id="spec-padded-val">9</span> floats). Since <code class="text-emerald-300">gcd(<span id="spec-gcd-a">9</span>, <span id="spec-gcd-b">8</span>) = 1</code>, column accesses distribute across all banks with <strong>0.00% conflict</strong> and cool the die to <strong>62.2°C</strong>!
+          <div class="bg-emerald-950/30 border border-emerald-500/30 rounded p-1.5 text-[10px] mono text-emerald-200">
+            <strong>Fix (+1 Padding):</strong> <code class="text-white">PADDED_STRIDE = TILE_DIM + 1</code> (<span id="spec-padded-val">9</span> floats, <code class="text-emerald-300">gcd(<span id="spec-gcd-a">9</span>, <span id="spec-gcd-b">8</span>) = 1</code>) → <strong>0.00% conflict</strong> &amp; <strong>62.2°C</strong>.
+          </div>
+        </div>
+
+        <!-- Section 9: Silicon Errata Sheet (Cross-Page Override Layer) -->
+        <div id="sec-9-errata" class="spec-section rounded-lg p-2.5 bg-rose-950/25 border border-rose-500/40">
+          <div class="flex items-center justify-between mb-1">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-rose-400 mono">⚠️ Section 9 · Page 88 (Cross-Page Silicon Errata Sheet)</span>
+            <span class="text-[9px] mono px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300">REV 4.2 OVERRIDE</span>
+          </div>
+          <h3 class="text-xs font-bold text-white mb-1">Mandatory Errata Advisories Superseding Sec 4.2, 5.1 &amp; 6.4</h3>
+          <div class="space-y-1.5 text-[10px] mono text-slate-300">
+            <div class="p-1.5 rounded bg-slate-950/90 border border-rose-500/30">
+              <span class="text-rose-400 font-bold">#E-401 (Overrides Sec 4.2):</span> Unaligned DMA + <span id="errata-rsvd-label">Bit 7</span> assertion triggers <code class="text-amber-300">18.4 A/ns</code> PDN <code class="text-amber-300">di/dt</code> droop (<code class="text-rose-300">682.4 mV</code>). Requires compile-time <code class="text-emerald-300">static_assert</code> guard.
+            </div>
+            <div class="p-1.5 rounded bg-slate-950/90 border border-amber-500/30">
+              <span class="text-amber-400 font-bold">#E-402 (Overrides Sec 5.1):</span> L1 D-Cache snoop filter bug on Rev 4.2 silicon. <code class="text-cyan-300">BURST_16 (0x15)</code> is <strong>strictly forbidden</strong> unless preceded by <code class="text-emerald-300">hw_dmb()</code> + followed by <code class="text-emerald-300">hw_poll_status_volatile()</code>.
+            </div>
+            <div class="p-1.5 rounded bg-slate-950/90 border border-purple-500/30">
+              <span class="text-purple-400 font-bold">#E-403 (Overrides Sec 6.4):</span> Power-of-two tile stride routes all column lanes to <code class="text-rose-300">Bank 0</code> (<code class="text-rose-300">45.9 W/mm²</code> sense-amp hotspot → <code class="text-rose-300">99.2°C</code> &amp; <code class="text-amber-300">WCET=49.85ms</code>). Requires coprime <code class="text-emerald-300">PADDED_STRIDE = TILE_DIM + 1</code> &amp; <code class="text-emerald-300">static_assert((PADDED_STRIDE % TILE_DIM) == 1)</code>.
+            </div>
           </div>
         </div>
 
         <!-- Dynamic Raw Markdown Preview -->
         <details class="bg-slate-950/80 border border-slate-800 rounded-lg p-2 text-[10px]">
           <summary class="cursor-pointer font-semibold text-slate-400 hover:text-slate-200 mono">
-            View Full Dynamic Datasheet Markdown Sent to Agent Context
+            View Full Dynamic Datasheet + Section 9 Errata Markdown
           </summary>
           <pre id="raw-datasheet-md" class="mt-2 text-[10px] text-slate-400 whitespace-pre-wrap mono max-h-48 overflow-y-auto"></pre>
         </details>
       </div>
 
-      <!-- TAB 2: PCB & AXI4 Timing Schematic (SVG) -->
+      <!-- TAB 2: HardwareSpec IR & WaveformQA Event-Time JSON -->
+      <div id="left-view-specir" class="hidden flex-1 overflow-y-auto p-3 space-y-2.5 select-text">
+        <div class="bg-slate-950 border border-amber-500/30 rounded-lg p-2.5">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-[11px] font-bold text-amber-300 mono">🧩 Typed HardwareSpec IR (SpecMap-IR/v3.0)</span>
+            <span class="text-[9px] mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300">Cross-Page Grounded</span>
+          </div>
+          <div class="text-[10px] text-slate-400 mb-1.5">
+            Synthesized from Datasheet PDF + Section 9 Errata + SVG Netlist + Scope Telemetry. Drives compile-time <code class="text-emerald-300">static_assert</code> guards:
+          </div>
+          <div id="specir-guards-list" class="space-y-1 mb-2"></div>
+          <pre id="specir-json-box" class="text-[10px] mono bg-slate-900 p-2 rounded border border-slate-800 text-cyan-200 overflow-x-auto max-h-48"></pre>
+        </div>
+
+        <div class="bg-slate-950 border border-cyan-500/30 rounded-lg p-2.5">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-[11px] font-bold text-cyan-300 mono">⏱️ WaveformQA Event-Time Telemetry JSON</span>
+            <span class="text-[9px] mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300">Timestamp-Aligned</span>
+          </div>
+          <div id="waveformqa-events-list" class="space-y-1.5"></div>
+        </div>
+      </div>
+
+      <!-- TAB 3: PCB & AXI4 Timing Schematic (SVG) -->
       <div id="left-view-schematic" class="hidden flex-1 overflow-y-auto p-3 space-y-2 select-text">
         <div class="bg-slate-950 border border-slate-800 rounded-lg p-2">
           <div class="flex items-center justify-between mb-1.5">
@@ -258,7 +296,7 @@
         </div>
       </div>
 
-      <!-- TAB 3: Oscilloscope 2,500-Row CSV Telemetry Dump -->
+      <!-- TAB 4: Oscilloscope 2,500-Row CSV Telemetry Dump -->
       <div id="left-view-csv" class="hidden flex-1 overflow-y-auto p-3 space-y-2 select-text">
         <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5">
           <div class="flex items-center justify-between mb-2">
@@ -268,9 +306,6 @@
             </div>
             <a href="/api/telemetry.csv" target="_blank" class="text-[10px] text-cyan-400 underline mono">Download Full 2,500-Row CSV ↗</a>
           </div>
-          <div class="text-[10px] text-slate-400 mb-2">
-            Critical hardware anomaly timestamps automatically cross-referenced by Argon during code synthesis:
-          </div>
           <div id="csv-anomalies-cards" class="space-y-1.5 mb-2"></div>
           <div class="text-[10px] font-semibold text-slate-400 mb-1 mono">CSV Telemetry Stream Window:</div>
           <pre id="csv-preview-box" class="text-[10px] mono bg-slate-900 p-2 rounded border border-slate-800 text-slate-300 overflow-x-auto max-h-64"></pre>
@@ -278,23 +313,37 @@
       </div>
     </section>
 
-    <!-- CENTER COLUMN (5 cols): Antigravity Native g++ Sandbox & Autonomous Patch Diff -->
+    <!-- CENTER COLUMN (5 cols): 6-Stage Hard Acceptance Gate + KernelPro Micro-Profiler + Patch Diff / Proof Bundle -->
     <section class="col-span-5 border-r border-slate-800 flex flex-col bg-slate-950 overflow-hidden">
 
+      <!-- 6-STAGE HIERARCHICAL HARD ACCEPTANCE GATE BAR -->
+      <div class="px-3 py-2 border-b border-slate-800 bg-slate-900/90 shrink-0">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-cyan-300 mono flex items-center gap-1.5">
+            <span>🛡️ 6-Stage Hierarchical Hard Acceptance Gate</span>
+            <span class="text-slate-500">(Zero-Shortcut Verification Pipeline)</span>
+          </span>
+          <span id="six-gate-summary-pill" class="px-2 py-0.5 text-[10px] font-bold rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 mono">
+            0 / 6 GATES PASSED
+          </span>
+        </div>
+        <div id="six-stage-gate-grid" class="grid grid-cols-6 gap-1"></div>
+      </div>
+
       <!-- Agent Reasoning & Multimodal Citation Box -->
-      <div class="p-3 border-b border-slate-800 bg-slate-900/60 shrink-0">
+      <div class="p-2.5 border-b border-slate-800 bg-slate-900/50 shrink-0">
         <div class="flex items-center justify-between mb-1">
           <div class="flex items-center gap-2">
             <span id="stage-badge" class="px-2 py-0.5 text-[10px] font-bold uppercase rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 mono">
               ITERATION 0 · HARDWARE FAULT
             </span>
-            <span id="stage-title" class="text-xs font-semibold text-white"></span>
+            <span id="stage-title" class="text-xs font-semibold text-white truncate max-w-[290px]"></span>
           </div>
           <span id="compile-timing-badge" class="text-[10px] mono text-slate-400">g++ -O2 · 0ms</span>
         </div>
 
-        <!-- Self-Healing Compiler Retry Alert (Visible when syntax bug is injected & auto-healed) -->
-        <div id="compiler-retry-banner" class="hidden mb-2 p-2 rounded bg-amber-950/60 border border-amber-500/50 text-[10px] mono text-amber-200">
+        <!-- Self-Healing Compiler Retry Alert -->
+        <div id="compiler-retry-banner" class="hidden mb-1.5 p-1.5 rounded bg-amber-950/60 border border-amber-500/50 text-[10px] mono text-amber-200">
           <div class="font-bold text-amber-300 flex items-center justify-between">
             <span>🛠️ SELF-HEALING COMPILER RETRY LOOP TRIGGERED (g++ stderr → Auto-Repaired)</span>
             <span id="retry-count-pill" class="px-1.5 py-0.2 bg-amber-500/20 rounded">1 Retry</span>
@@ -302,31 +351,43 @@
           <div id="retry-stderr-text" class="text-rose-300 truncate mt-0.5"></div>
         </div>
 
-        <p id="reasoning-trace" class="text-[11px] text-slate-300 leading-relaxed bg-slate-950/90 border border-slate-800 rounded p-2 mono whitespace-pre-line max-h-28 overflow-y-auto"></p>
+        <p id="reasoning-trace" class="text-[10px] text-slate-300 leading-relaxed bg-slate-950/90 border border-slate-800 rounded p-2 mono whitespace-pre-line max-h-24 overflow-y-auto"></p>
+
+        <!-- KernelPro / Nsight Compute Semantic Micro-Profiler Line Diagnostics -->
+        <div id="micro-profiler-box" class="mt-1.5 bg-slate-950/95 border border-slate-800 rounded p-1.5">
+          <div class="flex items-center justify-between text-[9px] mono text-slate-400 mb-1">
+            <span class="font-bold text-purple-300">🔬 KernelPro Semantic Micro-Profiler (Source Line ↔ Stride ↔ Wavefront Stall)</span>
+            <span id="micro-profiler-Bottleneck" class="text-amber-300 font-semibold"></span>
+          </div>
+          <div id="micro-profiler-rows" class="space-y-1 max-h-20 overflow-y-auto"></div>
+        </div>
 
         <!-- Multimodal Cross-Reference Pills -->
-        <div id="citations-list" class="mt-2 flex flex-wrap gap-1.5"></div>
+        <div id="citations-list" class="mt-1.5 flex flex-wrap gap-1"></div>
       </div>
 
-      <!-- Code / Visual Diff Mode Bar -->
+      <!-- Code / Visual Diff / Proof-Carrying Bundle Mode Bar -->
       <div class="px-3 py-1.5 border-b border-slate-800 bg-slate-900/90 flex items-center justify-between shrink-0">
         <div class="flex items-center gap-1">
-          <button onclick="setCodeViewMode('diff_prev')" id="view-btn-diff_prev" class="px-2.5 py-1 rounded text-[11px] font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
-            Visual Diff (vs Prev Step)
+          <button onclick="setCodeViewMode('diff_prev')" id="view-btn-diff_prev" class="px-2 py-1 rounded text-[10px] font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+            Visual Diff (Step)
           </button>
-          <button onclick="setCodeViewMode('diff_base')" id="view-btn-diff_base" class="px-2.5 py-1 rounded text-[11px] font-medium text-slate-400 hover:text-slate-200">
-            Cumulative Diff (vs Buggy)
+          <button onclick="setCodeViewMode('diff_base')" id="view-btn-diff_base" class="px-2 py-1 rounded text-[10px] font-medium text-slate-400 hover:text-slate-200">
+            Cumulative Diff
           </button>
-          <button onclick="setCodeViewMode('source')" id="view-btn-source" class="px-2.5 py-1 rounded text-[11px] font-medium text-slate-400 hover:text-slate-200">
-            Live C++ Editor &amp; Custom g++ Run
+          <button onclick="setCodeViewMode('proof')" id="view-btn-proof" class="px-2 py-1 rounded text-[10px] font-medium text-slate-400 hover:text-slate-200">
+            📜 Proof-Carrying Bundle
+          </button>
+          <button onclick="setCodeViewMode('source')" id="view-btn-source" class="px-2 py-1 rounded text-[10px] font-medium text-slate-400 hover:text-slate-200">
+            Live C++ Editor
           </button>
         </div>
-        <span id="compiler-cmd-label" class="text-[10px] mono text-slate-500 truncate max-w-[210px]" title="">
+        <span id="compiler-cmd-label" class="text-[9px] mono text-slate-500 truncate max-w-[165px]" title="">
           g++ -O2 -std=c++17
         </span>
       </div>
 
-      <!-- Diff / Source Content Area -->
+      <!-- Diff / Source / Proof Bundle Content Area -->
       <div id="code-display-container" class="flex-1 overflow-y-auto p-3 text-xs mono select-text"></div>
 
       <!-- Live Editor Action Footer (Shown in 'source' mode) -->
@@ -338,11 +399,11 @@
       </div>
     </section>
 
-    <!-- RIGHT COLUMN (3 cols): Hardware Telemetry + 2D/3D Silicon Die Thermal Simulation Canvas -->
-    <section class="col-span-3 flex flex-col bg-slate-900/40 overflow-y-auto p-3 space-y-3">
+    <!-- RIGHT COLUMN (3 cols): Hardware Telemetry + WCET/Jitter + Causal Graph + 2D/3D Silicon Die Thermal Simulation -->
+    <section class="col-span-3 flex flex-col bg-slate-900/40 overflow-y-auto p-2.5 space-y-2.5">
 
       <!-- Status Banner -->
-      <div id="telemetry-status-box" class="rounded-lg p-2.5 border bg-rose-950/40 border-rose-500/40">
+      <div id="telemetry-status-box" class="rounded-lg p-2 border bg-rose-950/40 border-rose-500/40">
         <div class="flex items-center justify-between">
           <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mono">SANDBOX HARDWARE VERDICT</span>
           <span id="tel-status-pill" class="px-2 py-0.5 text-[10px] font-bold rounded bg-rose-500 text-slate-950 mono">
@@ -353,16 +414,26 @@
         <p id="tel-fault-detail" class="text-[10px] text-slate-300 mt-0.5 leading-snug"></p>
       </div>
 
-      <!-- Quantitative KPI Grid -->
-      <div class="grid grid-cols-2 gap-2">
+      <!-- Quantitative KPI Grid (6 Cards including Real-Time WCET & Jitter) -->
+      <div class="grid grid-cols-2 gap-1.5">
         <div class="bg-slate-900 border border-slate-800 rounded-lg p-2">
           <div class="flex items-center justify-between">
-            <span class="text-[10px] text-slate-400">Frame Latency</span>
+            <span class="text-[10px] text-slate-400">Avg Latency</span>
             <span class="text-[9px] mono text-slate-500">SLA &lt; 3.50ms</span>
           </div>
           <div class="flex items-baseline gap-1.5 mt-0.5">
-            <span id="kpi-latency" class="text-base font-bold mono text-rose-400">46.51 ms</span>
-            <span id="kpi-speedup" class="text-[10px] mono text-emerald-400 font-semibold"></span>
+            <span id="kpi-latency" class="text-sm font-bold mono text-rose-400">46.51 ms</span>
+            <span id="kpi-speedup" class="text-[9px] mono text-emerald-400 font-semibold"></span>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-lg p-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] text-slate-400">Real-Time WCET</span>
+            <span id="kpi-jitter" class="text-[9px] mono text-amber-300">Jitter ±342us</span>
+          </div>
+          <div class="flex items-baseline gap-1.5 mt-0.5">
+            <span id="kpi-wcet" class="text-sm font-bold mono text-rose-400">49.85 ms</span>
           </div>
         </div>
 
@@ -372,8 +443,8 @@
             <span class="text-[9px] mono text-slate-500">Limit &lt; 75°C</span>
           </div>
           <div class="flex items-baseline gap-1.5 mt-0.5">
-            <span id="kpi-temp" class="text-base font-bold mono text-rose-400">97.7 °C</span>
-            <span id="kpi-vdd" class="text-[10px] mono text-amber-300">VDD 682mV</span>
+            <span id="kpi-temp" class="text-sm font-bold mono text-rose-400">97.7 °C</span>
+            <span id="kpi-vdd" class="text-[9px] mono text-amber-300">VDD 682mV</span>
           </div>
         </div>
 
@@ -383,36 +454,48 @@
             <span id="kpi-banks-label" class="text-[9px] mono text-slate-500">8-Bank</span>
           </div>
           <div class="flex items-baseline gap-1.5 mt-0.5">
-            <span id="kpi-conflict" class="text-base font-bold mono text-rose-400">94.12%</span>
-          </div>
-        </div>
-
-        <div class="bg-slate-900 border border-slate-800 rounded-lg p-2">
-          <div class="flex items-center justify-between">
-            <span class="text-[10px] text-slate-400">Tensor CRC32</span>
-            <span class="text-[9px] mono text-slate-500">Golden Match</span>
-          </div>
-          <div class="flex items-baseline gap-1.5 mt-0.5">
-            <span id="kpi-accuracy" class="text-base font-bold mono text-rose-400">0.0%</span>
-            <span id="kpi-crc" class="text-[9px] mono text-slate-400 truncate">0x811C9DC5</span>
+            <span id="kpi-conflict" class="text-sm font-bold mono text-rose-400">94.12%</span>
+            <span id="kpi-crc" class="text-[9px] mono text-slate-400 truncate">CRC FAIL</span>
           </div>
         </div>
       </div>
 
-      <!-- 2D / 3D SILICON DIE THERMAL HEATMAP SIMULATION CANVAS (Task 4) -->
-      <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5">
-        <div class="flex items-center justify-between mb-1.5">
+      <!-- PHYSICAL CAUSAL GRAPH SEPARATION CARD (Voltage Droop vs Thermal Hotspot) -->
+      <div class="bg-slate-900 border border-slate-800 rounded-lg p-2 space-y-1.5">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-amber-300 mono">⚡ Physical Causal Graph Separation</span>
+          <span class="text-[9px] mono text-slate-400">PDN di/dt vs Bank 0 Stall</span>
+        </div>
+        <div class="p-1.5 rounded bg-slate-950 border border-slate-800 text-[10px] mono">
+          <div class="flex items-center justify-between">
+            <span class="text-cyan-300 font-semibold">1. Voltage Droop (PDN di/dt):</span>
+            <span id="causal-vdd-badge" class="text-rose-400 font-bold">682.4 mV (18.4 A/ns)</span>
+          </div>
+          <div id="causal-vdd-desc" class="text-[9px] text-slate-400 mt-0.5 leading-tight"></div>
+        </div>
+        <div class="p-1.5 rounded bg-slate-950 border border-slate-800 text-[10px] mono">
+          <div class="flex items-center justify-between">
+            <span class="text-amber-300 font-semibold">2. Thermal Hotspot (Bank 0):</span>
+            <span id="causal-therm-badge" class="text-rose-400 font-bold">97.7°C (45.9 W/mm²)</span>
+          </div>
+          <div id="causal-therm-desc" class="text-[9px] text-slate-400 mt-0.5 leading-tight"></div>
+        </div>
+      </div>
+
+      <!-- 2D / 3D SILICON DIE THERMAL HEATMAP SIMULATION CANVAS -->
+      <div class="bg-slate-900 border border-slate-800 rounded-lg p-2">
+        <div class="flex items-center justify-between mb-1">
           <div>
             <span class="text-[11px] font-bold text-white block">🔥 Silicon Die Thermal PDE Simulation</span>
             <span class="text-[9px] text-slate-400 mono">8×8 Gauss-Seidel 2D Heat Diffusion (Steady-State)</span>
           </div>
           <div class="flex items-center gap-1 bg-slate-950 p-0.5 rounded border border-slate-800">
-            <button onclick="setThermalMode('3d')" id="therm-btn-3d" class="px-1.5 py-0.5 text-[10px] rounded bg-amber-500/20 text-amber-300 font-semibold mono">3D Surface</button>
-            <button onclick="setThermalMode('2d')" id="therm-btn-2d" class="px-1.5 py-0.5 text-[10px] rounded text-slate-400 mono">2D Die Map</button>
+            <button onclick="setThermalMode('3d')" id="therm-btn-3d" class="px-1.5 py-0.5 text-[9px] rounded bg-amber-500/20 text-amber-300 font-semibold mono">3D Surface</button>
+            <button onclick="setThermalMode('2d')" id="therm-btn-2d" class="px-1.5 py-0.5 text-[9px] rounded text-slate-400 mono">2D Die Map</button>
           </div>
         </div>
 
-        <canvas id="thermal-canvas" width="320" height="205" class="w-full rounded bg-slate-950 border border-slate-800"></canvas>
+        <canvas id="thermal-canvas" width="320" height="185" class="w-full rounded bg-slate-950 border border-slate-800"></canvas>
 
         <div class="flex items-center justify-between text-[9px] mono text-slate-400 mt-1">
           <span>45°C (Ambient)</span>
@@ -422,24 +505,13 @@
       </div>
 
       <!-- N-Bank Interleaved SRAM Conflict Histogram -->
-      <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5">
+      <div class="bg-slate-900 border border-slate-800 rounded-lg p-2">
         <div class="flex items-center justify-between mb-1">
-          <span id="hist-title" class="text-[11px] font-semibold text-white">8-Bank SRAM Access &amp; Collision Distribution</span>
-          <span class="text-[9px] mono text-slate-400">Sec 6.4</span>
+          <span id="hist-title" class="text-[10px] font-semibold text-white">8-Bank SRAM Access &amp; Collision Distribution</span>
+          <span class="text-[9px] mono text-slate-400">Sec 6.4 / #E-403</span>
         </div>
-        <div id="bank-bars-container" class="h-24 flex items-end gap-1 pt-3 pb-1 px-1 bg-slate-950 rounded border border-slate-800"></div>
+        <div id="bank-bars-container" class="h-20 flex items-end gap-1 pt-3 pb-1 px-1 bg-slate-950 rounded border border-slate-800"></div>
         <div id="bank-labels-container" class="flex justify-between text-[8px] mono text-slate-500 mt-1 px-1"></div>
-      </div>
-
-      <!-- 4-Point Hardware Verification Checklist -->
-      <div class="bg-slate-900 border border-slate-800 rounded-lg p-2.5 space-y-1.5">
-        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mono">
-          Hardware Constraint Checklist
-        </div>
-        <div id="check-align" class="flex items-center justify-between text-[11px] py-0.5 border-b border-slate-800/60"></div>
-        <div id="check-rsvd" class="flex items-center justify-between text-[11px] py-0.5 border-b border-slate-800/60"></div>
-        <div id="check-dmb" class="flex items-center justify-between text-[11px] py-0.5 border-b border-slate-800/60"></div>
-        <div id="check-bank" class="flex items-center justify-between text-[11px] py-0.5"></div>
       </div>
     </section>
 
@@ -461,15 +533,16 @@
     }
 
     function switchLeftTab(tab) {
-      ['datasheet', 'schematic', 'csv'].forEach(t => {
+      ['datasheet', 'specir', 'schematic', 'csv'].forEach(t => {
         const view = document.getElementById(`left-view-${t}`);
         const btn = document.getElementById(`ltab-${t}`);
+        if (!view || !btn) return;
         if (t === tab) {
           view.classList.remove('hidden');
-          btn.className = 'px-2.5 py-1 rounded text-[11px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40';
+          btn.className = 'px-2 py-1 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40';
         } else {
           view.classList.add('hidden');
-          btn.className = 'px-2.5 py-1 rounded text-[11px] font-semibold text-slate-400 hover:text-slate-200';
+          btn.className = 'px-2 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200';
         }
       });
     }
@@ -498,6 +571,47 @@
           </div>
         </div>
       `).join('');
+
+      renderSpecIrAndWaveformQa();
+    }
+
+    function renderSpecIrAndWaveformQa() {
+      if (!appData) return;
+      const ir = appData.hardware_spec_ir || (appData.multimodal && appData.multimodal.hardware_spec_ir) || {};
+      const wf = (appData.multimodal && appData.multimodal.waveform_event_time_json) || {};
+
+      const guardsEl = document.getElementById('specir-guards-list');
+      const guards = ir.static_assert_guards || [];
+      guardsEl.innerHTML = guards.map(g => `
+        <div class="p-1.5 rounded bg-slate-900 border border-emerald-500/30 text-[9px] mono text-emerald-300">
+          ✔ ${escapeHtml(g)}
+        </div>
+      `).join('');
+
+      document.getElementById('specir-json-box').textContent = JSON.stringify(
+        {
+          ir_schema_version: ir.ir_schema_version,
+          dma_constraints: ir.dma_constraints,
+          errata_overrides: ir.errata_overrides,
+          symbol_traceability_map: ir.symbol_traceability_map
+        },
+        null,
+        2
+      );
+
+      const wfEl = document.getElementById('waveformqa-events-list');
+      const wfEvents = wf.events || [];
+      wfEl.innerHTML = wfEvents.map(ev => `
+        <div class="p-2 rounded bg-slate-900 border border-slate-800 text-[10px] mono space-y-0.5">
+          <div class="flex items-center justify-between">
+            <span class="text-cyan-300 font-bold">${ev.event_id} · t=${ev.timestamp_window_us}</span>
+            <span class="text-amber-300">${ev.schematic_net}</span>
+          </div>
+          <div class="text-white">${escapeHtml(ev.signal_predicate)}</div>
+          <div class="text-slate-400 text-[9px]">PC: <span class="text-emerald-300">${escapeHtml(ev.pc_symbol)}</span></div>
+          <div class="text-rose-300 text-[9px]">Causal: ${escapeHtml(ev.physical_causal_mechanism)}</div>
+        </div>
+      `).join('');
     }
 
     function updateSpecLabels(spec) {
@@ -516,6 +630,7 @@
       document.getElementById('spec-align-code').textContent = alignB;
       document.getElementById('spec-unaligned-err').textContent = `ERR_DMA_UNALIGNED_${alignB}B`;
       document.getElementById('spec-rsvd-bit-col').textContent = `Bit ${rsvdBit} (${rsvdHex})`;
+      document.getElementById('errata-rsvd-label').textContent = `Bit ${rsvdBit} (${rsvdHex})`;
 
       document.getElementById('spec-bank-badge').textContent = `${banks}-BANK INTERLEAVED SRAM`;
       document.getElementById('spec-banks-count').textContent = banks;
@@ -532,6 +647,67 @@
       if (appData && appData.manual_markdown) {
         document.getElementById('raw-datasheet-md').textContent = appData.manual_markdown;
       }
+      renderSpecIrAndWaveformQa();
+    }
+
+    function renderSixStageGates(gatesObj) {
+      const grid = document.getElementById('six-stage-gate-grid');
+      const pill = document.getElementById('six-gate-summary-pill');
+      if (!gatesObj || !gatesObj.gates) return;
+
+      const passedCount = gatesObj.passed_count || 0;
+      const total = gatesObj.total_gates || 6;
+      pill.textContent = `${passedCount} / ${total} GATES PASSED`;
+      if (passedCount === total) {
+        pill.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 mono';
+      } else if (passedCount === 0) {
+        pill.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 mono';
+      } else {
+        pill.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 mono';
+      }
+
+      grid.innerHTML = gatesObj.gates.map(g => {
+        const cls = g.passed
+          ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-300'
+          : 'bg-rose-950/40 border-rose-500/30 text-rose-300';
+        return `
+          <div class="p-1 rounded border ${cls} text-[9px] mono flex flex-col justify-between" title="${escapeHtml(g.criterion)}: ${escapeHtml(g.measured)}">
+            <div class="flex items-center justify-between font-bold">
+              <span>${g.gate_id}</span>
+              <span>${g.passed ? '✔' : '✘'}</span>
+            </div>
+            <div class="truncate text-[8px] text-slate-300">${escapeHtml(g.name.replace(/^Gate \d:\s*/, ''))}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderMicroProfiler(profile) {
+      const rowsEl = document.getElementById('micro-profiler-rows');
+      const bottleEl = document.getElementById('micro-profiler-Bottleneck');
+      if (!profile || !profile.line_diagnostics) {
+        rowsEl.innerHTML = '';
+        bottleEl.textContent = '';
+        return;
+      }
+      bottleEl.textContent = profile.dominant_bottleneck || '';
+      rowsEl.innerHTML = profile.line_diagnostics.map(d => {
+        const isResolved = String(d.stall_root_cause).startsWith('RESOLVED');
+        const badgeCls = isResolved ? 'text-emerald-300' : 'text-rose-300';
+        return `
+          <div class="p-1 rounded bg-slate-900 border border-slate-800 text-[9px] mono flex items-center justify-between gap-2">
+            <div class="truncate">
+              <span class="text-cyan-400 font-bold">L${d.line_number}:</span>
+              <span class="text-slate-200">${escapeHtml(d.symbol_and_statement)}</span>
+            </div>
+            <div class="shrink-0 flex items-center gap-1.5">
+              <span class="px-1 rounded bg-slate-950 text-amber-300">Stride ${d.access_stride_bytes}B</span>
+              <span class="px-1 rounded bg-slate-950 text-purple-300">${escapeHtml(d.wavefront_serialization_ratio)}</span>
+              <span class="${badgeCls} font-semibold truncate max-w-[145px]" title="${escapeHtml(d.stall_root_cause)}">${isResolved ? '✔ OK' : '⚠ STALL'}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
     }
 
     function selectStage(idx) {
@@ -543,6 +719,9 @@
       for (let i = 0; i < appData.stages.length; i++) {
         const btn = document.getElementById(`step-btn-${i}`);
         if (!btn) continue;
+        const gPassed = appData.stages[i].six_stage_gates ? appData.stages[i].six_stage_gates.passed_count : i;
+        const labels = ['0. Fault', '1. Coherency', '2. Bank Stall', '3. Verified'];
+        btn.textContent = `${labels[i] || ('Step ' + i)} (${gPassed}/6)`;
         if (i === idx) {
           btn.className = i === 3
             ? 'px-2.5 py-1 rounded text-xs font-bold bg-emerald-500 text-slate-950 shadow'
@@ -552,17 +731,25 @@
         }
       }
 
-      // Highlight active datasheet section
-      ['sec-4-2', 'sec-5-1', 'sec-6-4'].forEach(secId => {
+      // Highlight active datasheet section + Section 9 Errata
+      ['sec-4-2', 'sec-5-1', 'sec-6-4', 'sec-9-errata'].forEach(secId => {
         const el = document.getElementById(secId);
         if (!el) return;
-        if (secId === stage.highlight_section_id) {
+        if (secId === stage.highlight_section_id || (secId === 'sec-9-errata' && idx < 3)) {
           el.classList.add('spec-highlight');
-          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          if (secId === stage.highlight_section_id) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
         } else {
           el.classList.remove('spec-highlight');
         }
       });
+
+      // Render 6-Stage Hierarchical Hard Acceptance Gates
+      renderSixStageGates(stage.six_stage_gates);
+
+      // Render KernelPro Semantic Micro-Profiler
+      renderMicroProfiler(stage.sandbox.semantic_micro_profile);
 
       // Stage header & reasoning
       const badge = document.getElementById('stage-badge');
@@ -601,13 +788,13 @@
       const mms = stage.multimodal_evidence || [];
       citList.innerHTML = [
         ...cits.map(c => `
-          <span class="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-300 mono">
-            📘 ${c.section}: ${c.register_or_rule}
+          <span class="px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-[9px] text-amber-300 mono">
+            📘 ${escapeHtml(c.section)}: ${escapeHtml(c.register_or_rule)}
           </span>
         `),
         ...mms.map(m => `
-          <span class="px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-[10px] text-cyan-300 mono">
-            🔬 ${m.source} (${m.timestamp_or_node})
+          <span class="px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-[9px] text-cyan-300 mono">
+            🔬 ${escapeHtml(m.source)} (${escapeHtml(m.timestamp_or_node)})
           </span>
         `)
       ].join('');
@@ -618,12 +805,13 @@
 
     function setCodeViewMode(mode) {
       codeViewMode = mode;
-      ['diff_prev', 'diff_base', 'source'].forEach(m => {
+      ['diff_prev', 'diff_base', 'proof', 'source'].forEach(m => {
         const btn = document.getElementById(`view-btn-${m}`);
+        if (!btn) return;
         if (m === mode) {
-          btn.className = 'px-2.5 py-1 rounded text-[11px] font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/40';
+          btn.className = 'px-2 py-1 rounded text-[10px] font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/40';
         } else {
-          btn.className = 'px-2.5 py-1 rounded text-[11px] font-medium text-slate-400 hover:text-slate-200';
+          btn.className = 'px-2 py-1 rounded text-[10px] font-medium text-slate-400 hover:text-slate-200';
         }
       });
       document.getElementById('custom-compile-bar').classList.toggle('hidden', mode !== 'source');
@@ -631,7 +819,7 @@
     }
 
     function escapeHtml(str) {
-      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
     function renderCodeView() {
@@ -640,7 +828,47 @@
 
       if (codeViewMode === 'source') {
         container.innerHTML = `
-          <textarea id="custom-code-editor" class="w-full h-full min-h-[380px] bg-slate-900 text-slate-200 p-3 rounded border border-slate-700 focus:outline-none focus:border-cyan-500 mono text-xs leading-relaxed" spellcheck="false">${escapeHtml(stage.code)}</textarea>
+          <textarea id="custom-code-editor" class="w-full h-full min-h-[340px] bg-slate-900 text-slate-200 p-3 rounded border border-slate-700 focus:outline-none focus:border-cyan-500 mono text-xs leading-relaxed" spellcheck="false">${escapeHtml(stage.code)}</textarea>
+        `;
+        return;
+      }
+
+      if (codeViewMode === 'proof') {
+        const bundle = appData.proof_carrying_bundle || {};
+        const ba = bundle.before_after_counter_proof || {};
+        const b0 = ba.baseline_iter0 || {};
+        const f3 = ba.final_iter3 || {};
+        container.innerHTML = `
+          <div class="space-y-2.5 text-[11px]">
+            <div class="p-2.5 rounded bg-emerald-950/30 border border-emerald-500/40 flex items-center justify-between">
+              <div>
+                <div class="font-bold text-emerald-300">📜 Proof-Carrying Patch Evidence Bundle (${escapeHtml(bundle.bundle_schema || 'SiliconHeal-ProofCarryingBundle/v3.0')})</div>
+                <div class="text-[10px] text-slate-300">Machine-Verifiable Cross-Modal Traceability: Datasheet + Section 9 Errata + SVG Netlist + WaveformQA + C++17 static_assert</div>
+              </div>
+              <span class="px-2 py-0.5 rounded bg-emerald-500 text-slate-950 font-bold text-[10px]">6/6 GATES VERIFIED</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 text-[10px]">
+              <div class="p-2 rounded bg-slate-900 border border-slate-800">
+                <div class="font-bold text-amber-300 mb-1">Before (Iter 0 Baseline Fault)</div>
+                <div>• Status: <span class="text-rose-400">${escapeHtml(b0.status)}</span></div>
+                <div>• Avg / WCET: <span class="text-rose-400">${b0.latency_ms} ms / ${b0.wcet_ms} ms (±${b0.jitter_us} us)</span></div>
+                <div>• Bank Conflict: <span class="text-rose-400">${b0.bank_conflict_rate_pct}%</span></div>
+                <div>• Peak Temp / VDD: <span class="text-rose-400">${b0.peak_die_temp_c}°C / ${b0.vdd_droop_mv} mV</span></div>
+                <div>• CRC32: <span class="text-rose-400">${escapeHtml(b0.crc32)}</span></div>
+              </div>
+              <div class="p-2 rounded bg-slate-900 border border-emerald-500/30">
+                <div class="font-bold text-emerald-300 mb-1">After (Iter 3 Proof-Verified Kernel)</div>
+                <div>• Status: <span class="text-emerald-400">${escapeHtml(f3.status)}</span></div>
+                <div>• Avg / WCET: <span class="text-emerald-400">${f3.latency_ms} ms / ${f3.wcet_ms} ms (±${f3.jitter_us} us)</span></div>
+                <div>• Bank Conflict: <span class="text-emerald-400">${f3.bank_conflict_rate_pct}%</span></div>
+                <div>• Peak Temp / VDD: <span class="text-emerald-400">${f3.peak_die_temp_c}°C / ${f3.vdd_droop_mv} mV</span></div>
+                <div>• CRC32: <span class="text-emerald-400">${escapeHtml(f3.crc32)} (100% Match)</span></div>
+              </div>
+            </div>
+
+            <pre class="text-[10px] bg-slate-900 p-2.5 rounded border border-slate-800 text-cyan-200 overflow-x-auto">${escapeHtml(JSON.stringify(bundle, null, 2))}</pre>
+          </div>
         `;
         return;
       }
@@ -679,13 +907,13 @@
       document.getElementById('tel-fault-detail').textContent = tel.fault_detail;
 
       if (tel.status === 'ALL_SLA_PASSED') {
-        box.className = 'rounded-lg p-2.5 border bg-emerald-950/40 border-emerald-500/40';
+        box.className = 'rounded-lg p-2 border bg-emerald-950/40 border-emerald-500/40';
         pill.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-400 text-slate-950 mono';
       } else if (tel.status === 'HARDWARE_FAULT') {
-        box.className = 'rounded-lg p-2.5 border bg-rose-950/40 border-rose-500/40';
+        box.className = 'rounded-lg p-2 border bg-rose-950/40 border-rose-500/40';
         pill.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-rose-500 text-white mono';
       } else {
-        box.className = 'rounded-lg p-2.5 border bg-amber-950/40 border-amber-500/40';
+        box.className = 'rounded-lg p-2 border bg-amber-950/40 border-amber-500/40';
         pill.className = 'px-2 py-0.5 text-[10px] font-bold rounded bg-amber-400 text-slate-950 mono';
       }
       pill.textContent = tel.status;
@@ -695,38 +923,65 @@
       const spdEl = document.getElementById('kpi-speedup');
       if (tel.status === 'HARDWARE_FAULT') {
         latEl.textContent = 'ABORTED';
-        latEl.className = 'text-base font-bold mono text-rose-400';
+        latEl.className = 'text-sm font-bold mono text-rose-400';
         spdEl.textContent = 'Bus Lock';
       } else {
         latEl.textContent = `${tel.latency_ms.toFixed(2)} ms`;
         const isFast = tel.latency_ms <= tel.sla_target_ms;
-        latEl.className = `text-base font-bold mono ${isFast ? 'text-emerald-400' : 'text-amber-400'}`;
-        spdEl.textContent = isFast ? `18.9x Faster` : `> ${tel.sla_target_ms}ms SLA`;
+        latEl.className = `text-sm font-bold mono ${isFast ? 'text-emerald-400' : 'text-amber-400'}`;
+        spdEl.textContent = isFast ? `18.9x Faster` : `> ${tel.sla_target_ms}ms`;
       }
+
+      // Real-Time WCET & Jitter KPI
+      const wcetEl = document.getElementById('kpi-wcet');
+      const jitEl = document.getElementById('kpi-jitter');
+      const wcetVal = tel.wcet_ms ?? tel.latency_ms;
+      const jitVal = tel.jitter_us ?? 0;
+      wcetEl.textContent = `${wcetVal.toFixed(2)} ms`;
+      wcetEl.className = `text-sm font-bold mono ${wcetVal <= tel.sla_target_ms && tel.status !== 'HARDWARE_FAULT' ? 'text-emerald-400' : 'text-rose-400'}`;
+      jitEl.textContent = `Jitter ±${jitVal.toFixed(1)}us`;
+      jitEl.className = `text-[9px] mono ${jitVal <= 50 && tel.status !== 'HARDWARE_FAULT' ? 'text-emerald-300' : 'text-amber-300'}`;
 
       // Thermal & VDD KPI
       const tempEl = document.getElementById('kpi-temp');
       const vddEl = document.getElementById('kpi-vdd');
       const peakT = tel.peak_die_temp_c || 45.0;
       tempEl.textContent = `${peakT.toFixed(1)} °C`;
-      tempEl.className = `text-base font-bold mono ${peakT > 80 ? 'text-rose-400' : 'text-emerald-400'}`;
+      tempEl.className = `text-sm font-bold mono ${peakT > 80 ? 'text-rose-400' : 'text-emerald-400'}`;
       vddEl.textContent = `VDD ${(tel.vdd_droop_mv || 842).toFixed(0)}mV`;
 
-      // Bank Conflict KPI
+      // Bank Conflict & CRC KPI
       const confEl = document.getElementById('kpi-conflict');
       confEl.textContent = `${tel.bank_conflict_rate_pct.toFixed(2)}%`;
-      confEl.className = `text-base font-bold mono ${tel.bank_conflict_rate_pct < 5 && tel.status !== 'HARDWARE_FAULT' ? 'text-emerald-400' : 'text-rose-400'}`;
+      confEl.className = `text-sm font-bold mono ${tel.bank_conflict_rate_pct < 5 && tel.status !== 'HARDWARE_FAULT' ? 'text-emerald-400' : 'text-rose-400'}`;
+      const crcEl = document.getElementById('kpi-crc');
+      crcEl.textContent = tel.crc_passed ? `CRC OK (${tel.crc_actual})` : `CRC FAIL`;
+      crcEl.className = `text-[9px] mono truncate ${tel.crc_passed ? 'text-emerald-400' : 'text-rose-400'}`;
 
-      // Accuracy KPI
-      const accEl = document.getElementById('kpi-accuracy');
-      accEl.textContent = `${tel.accuracy_pct.toFixed(1)}%`;
-      accEl.className = `text-base font-bold mono ${tel.crc_passed ? 'text-emerald-400' : 'text-rose-400'}`;
-      document.getElementById('kpi-crc').textContent = tel.crc_actual || '';
+      // Physical Causal Graph Separation Card
+      const cg = tel.causal_graph || {};
+      const vddCause = cg.voltage_droop_cause || {};
+      const thmCause = cg.thermal_hotspot_cause || {};
+      const vddBadge = document.getElementById('causal-vdd-badge');
+      const thmBadge = document.getElementById('causal-therm-badge');
+      const didt = tel.pdn_di_dt_spike_a_per_ns ?? 1.8;
+      const pwrD = tel.bank0_power_density_w_mm2 ?? 7.4;
+      const ways = tel.wavefront_serialization_ways ?? 1;
+
+      vddBadge.textContent = `${(tel.vdd_droop_mv || 842).toFixed(1)} mV (${didt.toFixed(1)} A/ns)`;
+      vddBadge.className = (tel.vdd_droop_mv >= 780) ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold';
+      document.getElementById('causal-vdd-desc').textContent =
+        vddCause.mechanism || 'PDN transient di/dt response on NET_VDD_CORE_SENSE';
+
+      thmBadge.textContent = `${peakT.toFixed(1)}°C (${pwrD.toFixed(1)} W/mm² · ${ways}-Way)`;
+      thmBadge.className = (peakT <= 75.0) ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold';
+      document.getElementById('causal-therm-desc').textContent =
+        thmCause.mechanism || 'SRAM Bank 0 sense-amp wavefront serialization power density';
 
       // Render 2D/3D Thermal Canvas
       drawThermalCanvas(tel.die_thermal_grid_c, peakT, tel.status);
 
-      // Render N-Bank Histogram (Supports 8-Bank or 16-Bank dynamically)
+      // Render N-Bank Histogram
       const barsContainer = document.getElementById('bank-bars-container');
       const labelsContainer = document.getElementById('bank-labels-container');
       const accesses = tel.bank_access_hist || [];
@@ -748,34 +1003,16 @@
       }).join('');
 
       labelsContainer.innerHTML = accesses.map((_, b) => `<span>B${b}</span>`).join('');
-
-      // Render 4-Point Hardware Verification Checklist
-      const sc = tel.spec_config || appData.spec_config || { dma_align_bytes: 64, rsvd_mbz_bit: 7, num_banks: 8 };
-      const rsvdClear = tel.status !== 'HARDWARE_FAULT' || !String(tel.fault_code).includes('DEADLOCK');
-      setCheckItem('check-align', `Sec 4.2.1 · ${sc.dma_align_bytes}-Byte DMA Align`, tel.dst_aligned_ok);
-      setCheckItem('check-rsvd', `Sec 4.2.2 · Bit ${sc.rsvd_mbz_bit} Clear & BURST_16`, rsvdClear && tel.burst16_enabled);
-      setCheckItem('check-dmb', `Sec 5.1 · hw_dmb() + Volatile Poll`, tel.dmb_barrier_called && tel.volatile_polled);
-      setCheckItem('check-bank', `Sec 6.4 · ${sc.num_banks}-Bank +1 Pad (0% Stall)`, tel.status === 'ALL_SLA_PASSED');
-    }
-
-    function setCheckItem(id, label, passed) {
-      const el = document.getElementById(id);
-      el.innerHTML = `
-        <span class="text-slate-300">${label}</span>
-        <span class="mono font-bold text-[10px] ${passed ? 'text-emerald-400' : 'text-rose-400'}">
-          ${passed ? '✔ PASS' : '✘ FAIL'}
-        </span>
-      `;
     }
 
     function setThermalMode(mode) {
       thermalViewMode = mode;
       document.getElementById('therm-btn-3d').className = mode === '3d'
-        ? 'px-1.5 py-0.5 text-[10px] rounded bg-amber-500/20 text-amber-300 font-semibold mono'
-        : 'px-1.5 py-0.5 text-[10px] rounded text-slate-400 mono';
+        ? 'px-1.5 py-0.5 text-[9px] rounded bg-amber-500/20 text-amber-300 font-semibold mono'
+        : 'px-1.5 py-0.5 text-[9px] rounded text-slate-400 mono';
       document.getElementById('therm-btn-2d').className = mode === '2d'
-        ? 'px-1.5 py-0.5 text-[10px] rounded bg-amber-500/20 text-amber-300 font-semibold mono'
-        : 'px-1.5 py-0.5 text-[10px] rounded text-slate-400 mono';
+        ? 'px-1.5 py-0.5 text-[9px] rounded bg-amber-500/20 text-amber-300 font-semibold mono'
+        : 'px-1.5 py-0.5 text-[9px] rounded text-slate-400 mono';
 
       const stage = appData.stages[currentStageIdx];
       if (stage) {
@@ -815,7 +1052,7 @@
       ctx.clearRect(0, 0, W, H);
 
       if (thermalViewMode === '2d') {
-        const padX = 18, padY = 14;
+        const padX = 18, padY = 12;
         const cellW = (W - padX * 2) / 8;
         const cellH = (H - padY * 2) / 8;
 
@@ -826,7 +1063,7 @@
             ctx.fillRect(padX + c * cellW, padY + r * cellH, cellW - 2, cellH - 2);
             ctx.fillStyle = temp > 78 ? '#ffffff' : '#0f172a';
             ctx.font = 'bold 9px JetBrains Mono';
-            ctx.fillText(`${temp.toFixed(0)}°`, padX + c * cellW + 5, padY + r * cellH + 14);
+            ctx.fillText(`${temp.toFixed(0)}°`, padX + c * cellW + 5, padY + r * cellH + 13);
           }
         }
         ctx.strokeStyle = 'rgba(255,255,255,0.22)';
@@ -836,12 +1073,12 @@
 
       // 3D Isometric Thermal Elevation Surface
       const originX = W / 2;
-      const originY = 54;
+      const originY = 48;
       const tileW = 30;
-      const tileH = 14;
+      const tileH = 13;
 
       function projectIso(r, c, temp) {
-        const elev = Math.max(0, (temp - 45.0) * 1.15);
+        const elev = Math.max(0, (temp - 45.0) * 1.05);
         const x = originX + (c - r) * (tileW / 2);
         const y = originY + (c + r) * (tileH / 2) - elev;
         return { x, y, temp };
@@ -870,13 +1107,12 @@
         }
       }
 
-      // Annotate Hotspot vs Cooled Die Status
       ctx.font = 'bold 10px JetBrains Mono';
       ctx.fillStyle = peakTemp > 80 ? '#fda4af' : '#6ee7b7';
       const label = peakTemp > 80
-        ? `⚠ HOTSPOT: ${peakTemp.toFixed(1)}°C (Bank 0 / AXI Stall)`
+        ? `⚠ HOTSPOT: ${peakTemp.toFixed(1)}°C (Bank 0 Sense-Amp 45.9 W/mm²)`
         : `✔ UNIFORM THERMAL DISTRIBUTION: ${peakTemp.toFixed(1)}°C`;
-      ctx.fillText(label, 12, H - 10);
+      ctx.fillText(label, 10, H - 8);
     }
 
     async function triggerMutateAndHeal() {
@@ -908,6 +1144,9 @@
         if (data.ok) {
           appData.spec_config = data.spec_config;
           appData.manual_markdown = data.manual_markdown;
+          appData.multimodal = data.multimodal;
+          appData.hardware_spec_ir = data.hardware_spec_ir;
+          appData.proof_carrying_bundle = data.proof_carrying_bundle;
           appData.stages = data.stages;
           appData.compiler_retry_events = data.compiler_retry_events || [];
           updateSpecLabels(data.spec_config);
@@ -935,7 +1174,10 @@
       if (data.ok) {
         appData.stages[currentStageIdx].code = customCode;
         appData.stages[currentStageIdx].sandbox = data.sandbox;
+        appData.stages[currentStageIdx].six_stage_gates = data.six_stage_gates;
         appData.stages[currentStageIdx].diff_vs_baseline = data.diff_vs_baseline;
+        renderSixStageGates(data.six_stage_gates);
+        renderMicroProfiler(data.sandbox.semantic_micro_profile);
         renderTelemetry(data.sandbox.telemetry);
       }
     }

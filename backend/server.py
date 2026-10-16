@@ -17,6 +17,7 @@ if str(BACKEND_DIR) not in sys.path:
 from agent_loop import (
     SILICON_HEAL_SYSTEM_PROMPT,
     build_stage_result,
+    evaluate_six_stage_gates,
     run_autonomous_closed_loop,
 )
 from multimodal_context import (
@@ -107,12 +108,14 @@ class SiliconHealHandler(BaseHTTPRequestHandler):
             preview_rows.extend(csv_lines[280:300])
             self._send_json(
                 {
-                    "project": "SiliconHeal: Autonomous Hardware-Spec & Kernel Self-Healing Agent",
-                    "engine": "Gemini 4 Argon (thinking_level=\"high\") + Antigravity Native g++ Sandbox",
+                    "project": "SiliconHeal v3.0: Autonomous Hardware-Spec IR & Proof-Carrying Kernel Self-Healing Agent",
+                    "engine": "Gemini 4 Argon (thinking_level=\"high\") + Antigravity Native g++ Sandbox + SpecMap IR",
                     "mode": loop_res["mode"],
                     "spec_config": loop_res["spec_config"],
                     "manual_markdown": loop_res["manual_markdown"],
                     "multimodal": loop_res["multimodal"],
+                    "hardware_spec_ir": loop_res["hardware_spec_ir"],
+                    "proof_carrying_bundle": loop_res["proof_carrying_bundle"],
                     "schematic_svg": svg_text,
                     "csv_preview": "\n".join(preview_rows[:45]),
                     "csv_total_rows": len(csv_lines) - 1,
@@ -180,6 +183,8 @@ class SiliconHealHandler(BaseHTTPRequestHandler):
                     "spec_config": loop_res["spec_config"],
                     "manual_markdown": loop_res["manual_markdown"],
                     "multimodal": loop_res["multimodal"],
+                    "hardware_spec_ir": loop_res["hardware_spec_ir"],
+                    "proof_carrying_bundle": loop_res["proof_carrying_bundle"],
                     "stages": loop_res["stages"],
                     "compiler_retry_events": loop_res["compiler_retry_events"],
                     "all_passed": loop_res["all_passed"],
@@ -192,6 +197,7 @@ class SiliconHealHandler(BaseHTTPRequestHandler):
             spec_cfg = payload.get("spec_config") or dict(DEFAULT_SPEC)
             baseline_code = (GOLDEN_DIR / "kernel_buggy.cpp").read_text(encoding="utf-8")
             sandbox_res = compile_and_run_kernel(custom_code, step_id="custom", spec_config=spec_cfg)
+            six_gates = evaluate_six_stage_gates(sandbox_res, spec_cfg)
             diff_vs_baseline = compute_unified_diff(
                 baseline_code,
                 custom_code,
@@ -203,6 +209,7 @@ class SiliconHealHandler(BaseHTTPRequestHandler):
                     "ok": True,
                     "spec_config": spec_cfg,
                     "sandbox": sandbox_res,
+                    "six_stage_gates": six_gates,
                     "diff_vs_baseline": diff_vs_baseline,
                 }
             )
