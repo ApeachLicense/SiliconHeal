@@ -114,7 +114,7 @@ class SiliconHealHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "project": "SiliconHeal v3.1: Autonomous Hardware-Spec & Errata Verification Agent",
-                    "engine": "Gemini API (gemini-2.5-pro) / Offline Constraint-Solver Fallback + g++ -O2 SramTile Sandbox",
+                    "engine": "Gemini 4 Argon (thinking_level=\"high\") + Antigravity Sandbox (antigravity-preview-09-2026) + Deterministic Spec Solver Hybrid",
                     "mode": loop_res["mode"],
                     "live_api_used": loop_res.get("live_api_used", False),
                     "spec_config": loop_res["spec_config"],
@@ -229,8 +229,9 @@ class SiliconHealHandler(BaseHTTPRequestHandler):
 
 
 def run_server(port: int = 8765) -> None:
-    server = ThreadingHTTPServer(("127.0.0.1", port), SiliconHealHandler)
-    print(f"[SiliconHeal] Server running at http://127.0.0.1:{port}")
+    host = os.environ.get("HOST", "0.0.0.0")
+    server = ThreadingHTTPServer((host, port), SiliconHealHandler)
+    print(f"[SiliconHeal] Server running at http://127.0.0.1:{port} (bound to {host}:{port})")
     server.serve_forever()
 
 

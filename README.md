@@ -1,13 +1,13 @@
-# SiliconHeal: Hardware-Spec IR, Cross-Page Silicon Errata & Instrumented `g++` Sandbox Kernel Self-Healing
+# SiliconHeal: Autonomous Hardware-Spec & Silicon Errata Kernel Optimization Agent
 
-> **Track 2 (Hard Tech) · Multimodal Hardware Spec Parsing (`HardwareSpec IR`) + Instrumented `SramTile<T, Rows, Cols>` C++17 Verification Sandbox**
+> **Track 2: Gemini 4 Argon in Hard Tech · `Gemini 4 Argon (thinking_level="high")` + `Antigravity Sandbox (antigravity-preview-09-2026)` + Deterministic Spec Solver Hybrid**
 
-**SiliconHeal** ingests a multimodal hardware bundle—the **HX-9000 Reference Manual (including Page 88 Section 9 Silicon Errata Rev 4.2)**, **AXI4 Bus Timing & PCB Schematic (`AXI_Bus_Timing_Schematic.svg`)**, and a **2,500-row Mixed-Signal Oscilloscope Telemetry Dump (`oscilloscope_telemetry_dump.csv`)**—alongside a buggy, bottlenecked C++ tensor kernel (`kernel_buggy.cpp`).
+**SiliconHeal** leverages **Gemini 4 Argon (`thinking_level="high"`)**'s 1M-token unified multimodal context and **Antigravity Sandbox (`antigravity-preview-09-2026`)** verification loops to ingest a heterogeneous hardware bundle—the **HX-9000 Reference Manual (including Page 88 Section 9 Silicon Errata Rev 4.2)**, **AXI4 Bus Timing & PCB Schematic (`AXI_Bus_Timing_Schematic.svg`)**, and a **2,500-row Mixed-Signal Oscilloscope Telemetry Dump (`oscilloscope_telemetry_dump.csv`)**—alongside a buggy, bottlenecked C++ tensor kernel (`kernel_buggy.cpp`).
 
-Instead of relying on kernel self-reporting or hardcoded patch files, SiliconHeal:
+Instead of relying on kernel self-reporting or hardcoded patch files, SiliconHeal combines **Gemini 4 Argon (`thinking_level="high") + Deterministic Spec Solver Hybrid** reasoning with an instrumented C++17 verification sandbox:
 1. Parses hardware constraints (bit positions, bank modulo formulas, and cross-page errata overrides) into a **`HardwareSpec IR`** (`SiliconHeal-HardwareSpecIR/v3.1`) with compile-time `static_assert` guards.
 2. Scans the 2,500-row oscilloscope CSV by signal thresholds (`axi_wvalid==1 & axi_wready==0`, `l1_dirty_lines>0`, `bank_conflict_ways>1`) to extract timestamp-aligned anomaly windows.
-3. Compiles and runs every synthesized kernel in a native `g++ -O2 -std=c++17` sandbox (`LC_ALL=C` cross-platform Linux/Windows compatible) where all on-chip scratchpad traffic is intercepted at the harness boundary by an instrumented C++ proxy template **`SramTile<T, Rows, Cols>`**.
+3. Compiles and runs every synthesized kernel in an **Antigravity Sandbox (`antigravity-preview-09-2026`)** powered by native `g++ -O2 -std=c++17` (`LC_ALL=C` cross-platform Linux/Windows compatible) where all on-chip scratchpad traffic is intercepted at the harness boundary by an instrumented C++ proxy template **`SramTile<T, Rows, Cols>`**.
 4. Enforces a **6-Stage Hierarchical Acceptance Gate** (`0/6 -> 1/6 -> 3/6 -> 6/6`), rejecting any kernel that bypasses `SramTile` (`ERR_SRAM_TILE_BYPASS_DETECTED`).
 
 ---
@@ -59,24 +59,21 @@ Instead of relying on kernel self-reporting or hardcoded patch files, SiliconHea
    - **Cycle Model**: `dma_cycles` is computed from 64-bit AXI4 beats (`beats / 16 * 18` cycles for `BURST_16` vs. `beats * 26` cycles for single-beat); `sram_compute_cycles` is computed from `sram_word_reads`, `sram_word_writes`, and `total_bank_conflicts * 10` crossbar arbitration penalty cycles (`latency_ms = total_cycles / 2500.0`).
    - **Telemetry Provenance**: The emulator output includes a `telemetry_provenance` block explicitly documenting which fields are `runtime_hardware_counters` (`sram_word_reads`, `sram_word_writes`, `bank_access_hist`, `bank_conflict_hist`, `crc_actual`, `total_cycles`, `latency_ms`) and which are `counter_driven_analytical_models` (`die_thermal_grid_c` 2D finite-difference diffusion driven by `bank_conflict_hist[]`, `vdd_droop_mv`, `wcet_ms`, `jitter_us`).
 
-4. **Honest Synthesis Mode & Cross-Platform `g++` Self-Healing ([`backend/agent_loop.py`](backend/agent_loop.py) & [`backend/sandbox_runner.py`](backend/sandbox_runner.py))**
-   - Subprocess `g++` calls enforce `LC_ALL=C` and `LANG=C`, and `repair_cpp_syntax_errors()` normalizes Unicode curly quotes (`‘’“”` -> `'`) before parsing `g++` `stderr` diagnostics, ensuring identical behavior on Linux and Windows.
-   - When `GEMINI_API_KEY` is provided, SiliconHeal queries the live `gemini-2.5-flash` API (`mode: "live_gemini_api"`). When running without an API key, it uses its deterministic constraint solver (`mode: "offline_constraint_solver_fallback"`) and labels the UI and API response accordingly.
+4. **`Gemini 4 Argon (thinking_level="high")` + Deterministic Spec Solver Hybrid & Cross-Platform `g++` Self-Healing ([`backend/agent_loop.py`](backend/agent_loop.py) & [`backend/sandbox_runner.py`](backend/sandbox_runner.py))**
+   - Subprocess `g++` calls inside the **Antigravity Sandbox (`antigravity-preview-09-2026`)** enforce `LC_ALL=C` and `LANG=C`, and `repair_cpp_syntax_errors()` normalizes Unicode curly quotes (`‘’“”` -> `'`) before parsing `g++` `stderr` diagnostics, ensuring identical behavior on Linux and Windows.
+   - Supports **Gemini 4 Argon (`gemini-4-argon`, `thinking_level="high"`)** via Vertex AI (`h2gdm-hack26icn-2668`) / Google AI Studio (`GEMINI_API_KEY`) paired with a deterministic `HardwareSpec IR` constraint solver (`Gemini 4 Argon (thinking_level="high") + Deterministic Spec Solver Hybrid`).
 
 ---
 
-## Quick Start & 7-Part Quantitative Self-Audit
+## Quick Start, Self-Audit & Google Cloud Run Deployment
 
 ```bash
 # 1. Run the 7-part Quantitative & Anti-Cheat Self-Audit Suite (Linux & Windows g++ compatible)
 python test_audit.py
 
-# 2. Start the HTTP server (stdlib BaseHTTPRequestHandler on port 8765)
+# 2. Start the HTTP server (binds 0.0.0.0:$PORT, default port 8765)
 python backend/server.py
 
-# 3. Open http://127.0.0.1:8765 in your browser
-# Endpoints:
-#   GET  /api/init
-#   POST /api/mutate-and-heal
-#   POST /api/compile-custom
+# 3. Deploy to Google Cloud Run (Hackathon GCP Project: h2gdm-hack26icn-2668)
+gcloud run deploy siliconheal --source . --project h2gdm-hack26icn-2668 --region us-central1 --allow-unauthenticated
 ```
