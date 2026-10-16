@@ -27,7 +27,7 @@ from multimodal_context import (
 )
 from sandbox_runner import compile_and_run_kernel, compute_unified_diff
 
-# Cache the initial default run for fast /api/init startup while still computed from real g++ closed loop
+# Cache the initial default run for fast /api/init startup while computed from real g++ closed loop
 _CACHED_DEFAULT_LOOP = None
 
 
@@ -36,7 +36,7 @@ def get_default_loop_result(force_refresh: bool = False) -> dict:
     if _CACHED_DEFAULT_LOOP is None or force_refresh:
         _CACHED_DEFAULT_LOOP = run_autonomous_closed_loop(
             spec_config=dict(DEFAULT_SPEC),
-            use_live_api=False,
+            use_live_api=None,
         )
     return _CACHED_DEFAULT_LOOP
 
@@ -99,18 +99,24 @@ class SiliconHealHandler(BaseHTTPRequestHandler):
             svg_text = (GOLDEN_DIR / "AXI_Bus_Timing_Schematic.svg").read_text(encoding="utf-8")
             csv_path = ensure_oscilloscope_csv(2500)
             csv_lines = csv_path.read_text(encoding="utf-8").splitlines()
-            # Provide header + anomaly window rows around t=142.40us, t=418.00us, t=1120.50us
             preview_rows = [csv_lines[0]]
             for line in csv_lines[1:]:
-                if any(tag in line for tag in ("AXI_BUS_DEADLOCK", "CACHE_COHERENCY_STALE_READ", "SRAM_BANK0_THERMAL_HOTSPOT")):
+                if any(
+                    tag in line
+                    for tag in (
+                        "TRAP_AXI_ARB_LOCK_AND_UNALIGNED_ADDR",
+                        "WARN_STALE_L1_CACHE_LINE_READ_NO_DMB",
+                        "THERMAL_THROTTLE_BANK0_HOTSPOT_98C",
+                    )
+                ):
                     preview_rows.append(line)
-            # Also add first 25 normal/transitional rows
             preview_rows.extend(csv_lines[280:300])
             self._send_json(
                 {
-                    "project": "SiliconHeal v3.0: Autonomous Hardware-Spec IR & Proof-Carrying Kernel Self-Healing Agent",
-                    "engine": "Gemini 4 Argon (thinking_level=\"high\") + Antigravity Native g++ Sandbox + SpecMap IR",
+                    "project": "SiliconHeal v3.1: Autonomous Hardware-Spec & Errata Verification Agent",
+                    "engine": "Gemini API (gemini-2.5-pro) / Offline Constraint-Solver Fallback + g++ -O2 SramTile Sandbox",
                     "mode": loop_res["mode"],
+                    "live_api_used": loop_res.get("live_api_used", False),
                     "spec_config": loop_res["spec_config"],
                     "manual_markdown": loop_res["manual_markdown"],
                     "multimodal": loop_res["multimodal"],
@@ -154,8 +160,12 @@ class SiliconHealHandler(BaseHTTPRequestHandler):
                 "sla_target_ms": float(raw_spec.get("sla_target_ms", 3.50)),
             }
             inject_syntax_bug = bool(payload.get("inject_syntax_bug", False))
-            use_live_api = bool(payload.get("use_live_api", False))
             api_key = (payload.get("api_key") or os.environ.get("GEMINI_API_KEY") or "").strip()
+            use_live_api = payload.get("use_live_api")
+            if use_live_api is None:
+                use_live_api = bool(api_key)
+            else:
+                use_live_api = bool(use_live_api)
             model_name = payload.get("model_name") or "gemini-2.5-pro"
 
             initial_code = payload.get("initial_code")
@@ -163,7 +173,6 @@ class SiliconHealHandler(BaseHTTPRequestHandler):
                 initial_code = (GOLDEN_DIR / "kernel_buggy.cpp").read_text(encoding="utf-8")
 
             if inject_syntax_bug:
-                # Inject a deliberate C++ syntax fault (missing semicolon) to test self-healing compiler retry loop
                 initial_code = initial_code.replace(
                     "const uint32_t dma_ctrl_flags = 0xC5;",
                     "const uint32_t dma_ctrl_flags = 0xC5 // [INJECTED SYNTAX BUG: missing semicolon]",
@@ -180,6 +189,7 @@ class SiliconHealHandler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "mode": loop_res["mode"],
+                    "live_api_used": loop_res.get("live_api_used", False),
                     "spec_config": loop_res["spec_config"],
                     "manual_markdown": loop_res["manual_markdown"],
                     "multimodal": loop_res["multimodal"],
@@ -197,7 +207,7 @@ class SiliconHealHandler(BaseHTTPRequestHandler):
             spec_cfg = payload.get("spec_config") or dict(DEFAULT_SPEC)
             baseline_code = (GOLDEN_DIR / "kernel_buggy.cpp").read_text(encoding="utf-8")
             sandbox_res = compile_and_run_kernel(custom_code, step_id="custom", spec_config=spec_cfg)
-            six_gates = evaluate_six_stage_gates(sandbox_res, spec_cfg)
+            six_gates = evaluate_six_stage_gates(sandbox_res["telemetry"], spec_cfg, custom_code)
             diff_vs_baseline = compute_unified_diff(
                 baseline_code,
                 custom_code,

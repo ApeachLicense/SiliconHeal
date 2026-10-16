@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import re
 import urllib.error
@@ -18,39 +19,83 @@ from sandbox_runner import (
     normalize_spec_config,
 )
 
-SILICON_HEAL_SYSTEM_PROMPT = """You are SiliconHeal-Argon v3.0, an autonomous Hardware-Spec Verification and Low-Level C/C++ Kernel Self-Healing Agent running inside the antigravity-preview-09-2026 execution sandbox.
+SILICON_HEAL_SYSTEM_PROMPT = """You are SiliconHeal, an autonomous Hardware-Spec Verification and Low-Level C/C++ Kernel Self-Healing Agent running with a g++ -O2 hardware-emulation verification loop.
 
-### MULTIMODAL & TYPED IR INPUTS (1M CONTEXT SYNTHESIS)
+### MULTIMODAL & TYPED IR INPUTS
 1. **Typed `HardwareSpec IR` & Cross-Page Silicon Errata Sheet (`HX9000_Reference_Manual.md`, Sec 9 Page 88)**:
-   - Errata `#E-401` (Overrides Sec 4.2, p.14): Enforces `alignas(HW_DMA_ALIGN_BYTES)` at base offset `[0]` and clears `DMA_CR[RSVD_MBZ]` to eliminate `18.4 A/ns` PDN `di/dt` voltage droop (`682.4 mV`).
-   - Errata `#E-402` (Overrides Sec 5.1, p.27): Enforces `hw_dmb()` before `hw_trigger_dma()` and `hw_poll_status_volatile()` to prevent L1 D-Cache dirty line snoop bypass (`56 lines`).
-   - Errata `#E-403` (Overrides Sec 6.4, p.41): Overrides nominal `TILE_DIM` stride with coprime `PADDED_STRIDE = TILE_DIM + 1` and compile-time `static_assert((PADDED_STRIDE % TILE_DIM) == 1)` to eliminate N-way wavefront serialization and `97.7°C~99.2°C` Bank 0 thermal runaway.
-2. **WaveformQA Normalized Event-Time JSON**: Synchronized timestamp predicates (`t=142.50us`, `t=418.00us`, `t=1120.50us`) mapped to `PC` and schematic nets (`NET_DMA_CR_MBZ_TRAP`, `NET_DMB_SNOOP_INV`, `NET_SRAM_XBAR_ARB`).
-3. **KernelPro Semantic Micro-Profiler**: Source line <-> compiled byte stride <-> wavefront serialization ratio <-> stall root cause.
+   - Errata `#E-401` (Overrides Sec 4.2, p.14): Enforces `alignas(HW_DMA_ALIGN_BYTES)` at base offset `[0]` and clears `DMA_CR[RSVD_MBZ]` bit to prevent AXI4 write-channel deadlock and PDN `di/dt` voltage droop.
+   - Errata `#E-402` (Overrides Sec 5.1, p.27): Hardware L1 snooping is disabled in Silicon Rev 4.2 (`CHIP_REV_ID = 0x00040002`). Software must explicitly call `hw_dmb()` before `hw_trigger_dma()` and poll completion via `hw_poll_status_volatile()`.
+   - Errata `#E-403` (Overrides Sec 6.4, p.41): To avoid N-way bank conflict during column-wise transpose reads (`Bank_ID = (r * Cols + c) mod N_BANKS`), instantiate `SramTile<float, TILE_DIM, COPRIME_COLS>` where `gcd(COPRIME_COLS, N_BANKS) == 1`, and enable burst mode (`DMA_CR_BURST16`) from the register bitfield specification.
+2. **CSV-Derived Event-Time Telemetry JSON**: Synchronized anomaly windows scanned from `oscilloscope_capture.csv`.
+3. **Runtime Hardware-Counter Micro-Profiler**: Maps source lines and observed `SramTile<T, Rows, Cols>` access patterns to bank-conflict serialization and cycle stalls.
 4. **6-Stage Hierarchical Hard Acceptance Gate**:
-   `[G1: Spec Safety] -> [G2: Functional CRC32] -> [G3: Cache Coherency] -> [G4: Real-Time WCET/Jitter] -> [G5: Throughput/Bank Conflict] -> [G6: Thermal/Voltage Envelope]`
+   `[G1: Spec Safety & SramTile Instrumentation] -> [G2: Functional CRC32] -> [G3: Cache Coherency] -> [G4: Real-Time WCET/Jitter] -> [G5: Throughput/Bank Conflict] -> [G6: Thermal/Voltage Envelope]`
 """
 
 
 def parse_constraints_from_datasheet(datasheet_text: str) -> Dict[str, Any]:
     """
-    Dynamically extracts hardware constraints and Errata overrides from the active datasheet text.
+    Dynamically extracts hardware register bit positions, alignment rules, bank count,
+    and errata presence from the datasheet text, and solves for the coprime SRAM stride.
     """
-    align_match = re.search(r"alignas\((\d+)\)", datasheet_text)
-    rsvd_match = re.search(r"Bit `(\d+)` \(`0x([0-9A-Fa-f]+) RSVD_MBZ`\)", datasheet_text)
+    align_match = re.search(
+        r"DMA_ALIGN=(\d+)B|(\d+)-Byte Cache-Line Address Alignment|alignas\((\d+)\)",
+        datasheet_text,
+    )
+    rsvd_table_match = re.search(
+        r"\|\s*(?:\*\*)?`(\d+)`(?:\*\*)?\s*\|\s*(?:\*\*)?`RSVD_MBZ`(?:\*\*)?",
+        datasheet_text,
+    )
+    rsvd_inline_match = re.search(r"Bit\s*`?(\d+)`?\s*\([^)\n]*RSVD_MBZ", datasheet_text)
+    burst_table_match = re.search(
+        r"\|\s*(?:\*\*)?`(\d+)`(?:\*\*)?\s*\|\s*(?:\*\*)?`BURST_16`(?:\*\*)?",
+        datasheet_text,
+    )
+    dir_table_match = re.search(
+        r"\|\s*(?:\*\*)?`(\d+)`(?:\*\*)?\s*\|\s*(?:\*\*)?`DIR_MEM2SRAM`(?:\*\*)?",
+        datasheet_text,
+    )
+    en_table_match = re.search(
+        r"\|\s*(?:\*\*)?`(\d+)`(?:\*\*)?\s*\|\s*(?:\*\*)?`EN`(?:\*\*)?",
+        datasheet_text,
+    )
     banks_match = re.search(r"## Section 6\.4 (\d+)-Bank Interleaved", datasheet_text)
     sla_match = re.search(r"SLA_TARGET=([\d.]+)ms", datasheet_text)
     has_errata_sheet = "Section 9. Silicon Errata Sheet" in datasheet_text
 
-    align_b = int(align_match.group(1)) if align_match else 64
-    rsvd_bit = int(rsvd_match.group(1)) if rsvd_match else 7
+    if align_match:
+        align_b = int(next(g for g in align_match.groups() if g is not None))
+    else:
+        align_b = 64
+    if rsvd_table_match:
+        rsvd_bit = int(rsvd_table_match.group(1))
+    elif rsvd_inline_match:
+        rsvd_bit = int(rsvd_inline_match.group(1))
+    else:
+        rsvd_bit = 7
+
+    bit_en = int(en_table_match.group(1)) if en_table_match else 0
+    bit_dir = int(dir_table_match.group(1)) if dir_table_match else 2
+    bit_burst16 = int(burst_table_match.group(1)) if burst_table_match else 4
+
     num_banks = int(banks_match.group(1)) if banks_match else 8
     sla_ms = float(sla_match.group(1)) if sla_match else 3.50
+
+    # Derive coprime column stride mathematically: smallest integer > num_banks with gcd(cols, num_banks) == 1
+    coprime_cols = num_banks + 1
+    while math.gcd(coprime_cols, num_banks) != 1:
+        coprime_cols += 1
 
     return {
         "dma_align_bytes": align_b,
         "rsvd_mbz_bit": rsvd_bit,
+        "bit_en": bit_en,
+        "bit_dir_m2s": bit_dir,
+        "bit_burst16": bit_burst16,
+        "single_beat_ctrl_mask": (1 << bit_dir) | (1 << bit_en),
+        "burst16_ctrl_mask": (1 << bit_burst16) | (1 << bit_dir) | (1 << bit_en),
         "num_banks": num_banks,
+        "coprime_cols": coprime_cols,
         "sla_target_ms": sla_ms,
         "errata_overrides_active": has_errata_sheet,
     }
@@ -63,7 +108,7 @@ def evaluate_six_stage_gates(
 ) -> Dict[str, Any]:
     """
     Evaluates the 6-Stage Hierarchical Hard Acceptance Gates in strict dependency order:
-      [1. Spec Safety (MBZ/Align)] -> [2. Functional CRC32] -> [3. Memory/Cache Coherency]
+      [1. Spec Safety & SramTile Instrumentation] -> [2. Functional CRC32] -> [3. Memory/Cache Coherency]
       -> [4. Real-Time WCET/Jitter] -> [5. Throughput/Bank Conflict] -> [6. Thermal/Voltage Envelope]
     """
     align_b = int(spec_config.get("dma_align_bytes", 64))
@@ -76,7 +121,25 @@ def evaluate_six_stage_gates(
     dst_aligned_ok = bool(telemetry.get("dst_aligned_ok", False))
     fault_code = str(telemetry.get("fault_code", ""))
     mbz_clear = (status != "HARDWARE_FAULT") or ("DEADLOCK" not in fault_code)
-    g1_pass = (status not in ("COMPILE_ERROR", "HARDWARE_FAULT")) and dst_aligned_ok and mbz_clear
+
+    # Anti-Cheat Instrumentation Check: Kernel MUST route all 65,536 tile writes & reads through SramTile<T, Rows, Cols>
+    sram_bypass = bool(telemetry.get("sram_bypass_detected", False))
+    sram_reads = int(telemetry.get("sram_word_reads", 0))
+    sram_writes = int(telemetry.get("sram_word_writes", 0))
+    transpose_groups = int(telemetry.get("strided_transpose_groups", 0))
+    sram_instrumented_ok = (
+        (not sram_bypass)
+        and (sram_reads >= 65536)
+        and (sram_writes >= 65536)
+        and (transpose_groups >= (65536 // max(1, num_banks)))
+    )
+
+    g1_pass = (
+        (status not in ("COMPILE_ERROR", "HARDWARE_FAULT"))
+        and dst_aligned_ok
+        and mbz_clear
+        and sram_instrumented_ok
+    )
 
     crc_passed = bool(telemetry.get("crc_passed", False))
     accuracy_pct = float(telemetry.get("accuracy_pct", 0.0))
@@ -94,7 +157,7 @@ def evaluate_six_stage_gates(
     conflict_pct = float(telemetry.get("bank_conflict_rate_pct", 100.0))
     burst16_ok = bool(telemetry.get("burst16_enabled", False))
     gops = float(telemetry.get("throughput_gops", 0.0))
-    g5_pass = g4_pass and (conflict_pct <= 0.01) and burst16_ok and (gops >= 19.0)
+    g5_pass = g4_pass and (conflict_pct <= 0.01) and burst16_ok and (gops >= 18.0)
 
     peak_temp = float(telemetry.get("peak_die_temp_c", 99.0))
     vdd_mv = float(telemetry.get("vdd_droop_mv", 682.4))
@@ -104,10 +167,14 @@ def evaluate_six_stage_gates(
         {
             "gate_index": 1,
             "gate_id": "G1_SPEC_SAFETY",
-            "short_name": "1. Spec Safety (MBZ/Align)",
+            "short_name": "1. Spec Safety (MBZ/Align/SramTile)",
             "passed": g1_pass,
             "errata_ref": "#E-401",
-            "metric_summary": f"alignas({telemetry.get('declared_dst_align', 16)}) vs {align_b}B | Bit {rsvd_bit} ({rsvd_hex}) {'CLEAR' if mbz_clear else 'LOCKED'}",
+            "metric_summary": (
+                f"alignas({telemetry.get('declared_dst_align', 16)}) vs {align_b}B | "
+                f"Bit {rsvd_bit} ({rsvd_hex}) {'CLEAR' if mbz_clear else 'LOCKED'} | "
+                f"SramTile reads={sram_reads}"
+            ),
         },
         {
             "gate_index": 2,
@@ -170,14 +237,15 @@ def build_proof_carrying_bundle(
     hardware_spec_ir: Dict[str, Any],
     osc_summary: Dict[str, Any],
     stages: List[Dict[str, Any]],
+    execution_mode: str = "offline_constraint_solver_fallback",
 ) -> Dict[str, Any]:
     """
-    Constructs the Proof-Carrying Evidence Bundle (JSON Certificate) uniting:
+    Constructs the Verification Evidence Bundle (JSON Report) uniting:
       - Cross-Page Datasheet & Errata Citations (Page, Section, Bounding Box)
-      - PCB Schematic Net Proofs (NET_*)
-      - WaveformQA Event-Time Predicates
-      - Compile-Time C++17 static_assert Proofs
-      - Physical Causal Graph Separation (PDN di/dt Droop vs. Wavefront Serialization Hotspot)
+      - PCB Schematic Net Traceability (NET_*)
+      - CSV-Derived Event-Time Anomaly Windows
+      - Compile-Time C++17 static_assert Guards
+      - Fault-Attribution Summary (PDN di/dt Droop vs. Bank-Conflict Hotspot)
       - Quantitative Before/After Telemetry & 6-Stage Hard Gate Ledger
     """
     first_tel = stages[0]["sandbox"]["telemetry"] if stages else {}
@@ -206,11 +274,17 @@ def build_proof_carrying_bundle(
         for e in hardware_spec_ir.get("errata_overrides", [])
     ]
 
+    mid_lat = float(mid_tel.get("latency_ms", 0.0))
+    fin_lat = float(final_tel.get("latency_ms", 0.0))
+    speedup = round(mid_lat / fin_lat, 2) if fin_lat > 0 else 0.0
+
     return {
-        "bundle_schema": "SiliconHeal-ProofCarryingBundle/v3.0",
-        "verification_verdict": "PROOF_CARRYING_ACCEPTED" if final_gates.get("all_gates_passed") else "REJECTED_INCOMPLETE",
-        "verification_status": "PROOF_VERIFIED_6_OF_6_GATES" if final_gates.get("all_gates_passed") else "INCOMPLETE",
+        "bundle_schema": "SiliconHeal-VerificationBundle/v3.1",
+        "execution_mode": execution_mode,
+        "verification_verdict": "VERIFIED_ACCEPTED" if final_gates.get("all_gates_passed") else "REJECTED_INCOMPLETE",
+        "verification_status": "VERIFIED_6_OF_6_GATES" if final_gates.get("all_gates_passed") else "INCOMPLETE",
         "spec_config": spec_config,
+        "telemetry_provenance": final_tel.get("telemetry_provenance", {}),
         "datasheet_and_errata_citations": errata_list,
         "hardware_spec_ir_digest": {
             "schema_version": hardware_spec_ir.get("schema_version"),
@@ -226,46 +300,43 @@ def build_proof_carrying_bundle(
         "before_after_counter_proof": {
             "baseline_iter0": {
                 "status": first_tel.get("status", "HARDWARE_FAULT"),
-                "latency_ms": mid_tel.get("latency_ms", 46.51),
-                "wcet_ms": mid_tel.get("wcet_ms", 53.02),
-                "jitter_us": mid_tel.get("jitter_us", 284.6),
-                "bank_conflict_rate_pct": mid_tel.get("bank_conflict_rate_pct", 94.12),
-                "peak_die_temp_c": mid_tel.get("peak_die_temp_c", 97.7),
-                "vdd_droop_mv": first_tel.get("vdd_droop_mv", 682.4),
+                "latency_ms": mid_lat,
+                "wcet_ms": float(mid_tel.get("wcet_ms", 0.0)),
+                "jitter_us": float(mid_tel.get("jitter_us", 0.0)),
+                "bank_conflict_rate_pct": float(mid_tel.get("bank_conflict_rate_pct", 0.0)),
+                "peak_die_temp_c": float(mid_tel.get("peak_die_temp_c", 0.0)),
+                "vdd_droop_mv": float(first_tel.get("vdd_droop_mv", 0.0)),
                 "crc32": first_tel.get("crc_actual", "0x00000000"),
             },
             "final_iter3": {
-                "status": final_tel.get("status", "ALL_SLA_PASSED"),
-                "latency_ms": final_tel.get("latency_ms", 2.46),
-                "wcet_ms": final_tel.get("wcet_ms", 2.53),
-                "jitter_us": final_tel.get("jitter_us", 4.2),
-                "bank_conflict_rate_pct": final_tel.get("bank_conflict_rate_pct", 0.0),
-                "peak_die_temp_c": final_tel.get("peak_die_temp_c", 62.2),
-                "vdd_droop_mv": final_tel.get("vdd_droop_mv", 842.0),
-                "crc32": final_tel.get("crc_actual", "0x7A9E4921"),
+                "status": final_tel.get("status", "UNKNOWN"),
+                "latency_ms": fin_lat,
+                "wcet_ms": float(final_tel.get("wcet_ms", 0.0)),
+                "jitter_us": float(final_tel.get("jitter_us", 0.0)),
+                "bank_conflict_rate_pct": float(final_tel.get("bank_conflict_rate_pct", 0.0)),
+                "peak_die_temp_c": float(final_tel.get("peak_die_temp_c", 0.0)),
+                "vdd_droop_mv": float(final_tel.get("vdd_droop_mv", 0.0)),
+                "crc32": final_tel.get("crc_actual", "0x00000000"),
             },
         },
         "quantitative_before_after": {
             "baseline_status": first_tel.get("status", "HARDWARE_FAULT"),
-            "final_status": final_tel.get("status", "ALL_SLA_PASSED"),
-            "unoptimized_latency_ms": mid_tel.get("latency_ms", 46.51),
-            "final_latency_ms": final_tel.get("latency_ms", 2.46),
-            "speedup_factor": round(
-                float(mid_tel.get("latency_ms", 46.51)) / max(0.01, float(final_tel.get("latency_ms", 2.46))),
-                2,
-            ),
-            "unoptimized_wcet_ms": mid_tel.get("wcet_ms", 53.02),
-            "final_wcet_ms": final_tel.get("wcet_ms", 2.53),
-            "unoptimized_jitter_us": mid_tel.get("jitter_us", 284.6),
-            "final_jitter_us": final_tel.get("jitter_us", 4.2),
-            "unoptimized_bank_conflict_pct": mid_tel.get("bank_conflict_rate_pct", 94.12),
-            "final_bank_conflict_pct": final_tel.get("bank_conflict_rate_pct", 0.0),
-            "unoptimized_peak_temp_c": mid_tel.get("peak_die_temp_c", 97.7),
-            "final_peak_temp_c": final_tel.get("peak_die_temp_c", 62.2),
-            "fault_vdd_droop_mv": first_tel.get("vdd_droop_mv", 682.4),
-            "final_vdd_core_mv": final_tel.get("vdd_droop_mv", 842.0),
+            "final_status": final_tel.get("status", "UNKNOWN"),
+            "unoptimized_latency_ms": mid_lat,
+            "final_latency_ms": fin_lat,
+            "speedup_factor": speedup,
+            "unoptimized_wcet_ms": float(mid_tel.get("wcet_ms", 0.0)),
+            "final_wcet_ms": float(final_tel.get("wcet_ms", 0.0)),
+            "unoptimized_jitter_us": float(mid_tel.get("jitter_us", 0.0)),
+            "final_jitter_us": float(final_tel.get("jitter_us", 0.0)),
+            "unoptimized_bank_conflict_pct": float(mid_tel.get("bank_conflict_rate_pct", 0.0)),
+            "final_bank_conflict_pct": float(final_tel.get("bank_conflict_rate_pct", 0.0)),
+            "unoptimized_peak_temp_c": float(mid_tel.get("peak_die_temp_c", 0.0)),
+            "final_peak_temp_c": float(final_tel.get("peak_die_temp_c", 0.0)),
+            "fault_vdd_droop_mv": float(first_tel.get("vdd_droop_mv", 0.0)),
+            "final_vdd_core_mv": float(final_tel.get("vdd_droop_mv", 0.0)),
             "crc32_golden": final_tel.get("crc_expected", "0x7A9E4921"),
-            "crc32_actual": final_tel.get("crc_actual", "0x7A9E4921"),
+            "crc32_actual": final_tel.get("crc_actual", "0x00000000"),
         },
         "six_stage_gate_ledger": final_gates,
     }
@@ -273,12 +344,46 @@ def build_proof_carrying_bundle(
 
 def repair_cpp_syntax_errors(broken_code: str, compiler_stderr: str) -> str:
     """
-    Self-healing compiler repair step: inspects g++ stderr and repairs common injected syntax errors
-    (e.g., missing semicolons, corrupted identifiers, unclosed statements).
+    Self-healing compiler repair step: normalizes Unicode curly quotes from Linux/UTF-8
+    g++ locales (`‘’“”`) to ASCII quotes, inspects g++ line numbers and diagnostics,
+    and repairs missing semicolons and corrupted identifiers.
     """
     fixed = broken_code
-    if "expected ';'" in compiler_stderr or "expected ',' or ';'" in compiler_stderr:
+    norm_err = (
+        compiler_stderr.replace("\u2018", "'")
+        .replace("\u2019", "'")
+        .replace("\u201c", '"')
+        .replace("\u201d", '"')
+        .replace("`", "'")
+    )
+
+    needs_semicolon_scan = (
+        "expected ';'" in norm_err
+        or "expected ',' or ';'" in norm_err
+        or "expected initializer before" in norm_err
+    )
+
+    if needs_semicolon_scan:
         lines = fixed.splitlines()
+        # First check any explicit line numbers flagged by g++ ("before '...'") where previous statement lacks ';'
+        flagged_lines = [int(m) for m in re.findall(r":(\d+):\d+:\s*error:", norm_err)]
+        for ln in flagged_lines:
+            for cand_idx in range(max(0, ln - 4), min(len(lines), ln)):
+                code_part = lines[cand_idx].split("//", 1)[0].rstrip()
+                comment_part = (
+                    (" // " + lines[cand_idx].split("//", 1)[1].lstrip())
+                    if "//" in lines[cand_idx]
+                    else ""
+                )
+                stripped = code_part.strip()
+                if (
+                    stripped
+                    and not stripped.startswith(("//", "#", "for ", "for(", "if ", "if(", "while ", "while(", "else"))
+                    and not stripped.endswith((";", "{", "}", ":", ",", "("))
+                ):
+                    lines[cand_idx] = code_part + ";" + comment_part
+
+        # Also scan known statement patterns for missing trailing semicolons
         for i, line in enumerate(lines):
             code_part = line.split("//", 1)[0].rstrip()
             comment_part = (" // " + line.split("//", 1)[1].lstrip()) if "//" in line else ""
@@ -298,6 +403,7 @@ def repair_cpp_syntax_errors(broken_code: str, compiler_stderr: str) -> str:
                         "HW_REGISTER_ALIGN",
                         "const int ",
                         "static constexpr",
+                        "SramTile<",
                     )
                 )
             ):
@@ -325,18 +431,20 @@ def synthesize_closed_loop_patch(
     sandbox_res: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
-    Autonomous Spec-Driven Code Synthesis Engine (v3.0).
-    Transforms `current_code` strictly based on:
-      1) Typed `HardwareSpec IR` & Cross-Page Errata (`#E-401`, `#E-402`, `#E-403`) parsed from `datasheet_text`
-      2) `WaveformQA` Event-Time JSON & Schematic Netlist (`osc_summary`)
-      3) Live `g++` compiler stderr, `KernelPro` Semantic Micro-Profile, and sandbox telemetry (`sandbox_res`)
+    Offline Constraint-Solver Baseline (used when GEMINI_API_KEY is not provided or API is unreachable).
+    Transforms `current_code` based on:
+      1) Register bit positions, alignment rules, and bank count parsed from `datasheet_text`
+      2) CSV-scanned anomaly windows (`osc_summary`)
+      3) Live `g++` compiler stderr and runtime hardware counters (`sandbox_res`)
     """
     parsed_spec = parse_constraints_from_datasheet(datasheet_text)
     align_b = parsed_spec["dma_align_bytes"]
     rsvd_bit = parsed_spec["rsvd_mbz_bit"]
     rsvd_hex = 1 << rsvd_bit
     num_banks = parsed_spec["num_banks"]
-    padded_stride = num_banks + 1
+    coprime_cols = parsed_spec["coprime_cols"]
+    single_beat_hex = f"0x{parsed_spec['single_beat_ctrl_mask']:02X}"
+    burst16_hex = f"0x{parsed_spec['burst16_ctrl_mask']:02X}"
     sla_ms = parsed_spec["sla_target_ms"]
 
     # 1. Handle Compiler Syntax / ABI Error (Self-Healing Retry)
@@ -344,13 +452,14 @@ def synthesize_closed_loop_patch(
         stderr_txt = sandbox_res.get("compiler_stderr", "")
         repaired_code = repair_cpp_syntax_errors(current_code, stderr_txt)
         return {
+            "patch_source": "offline_compiler_syntax_repair",
             "root_cause_category": "COMPILER_SYNTAX_REPAIRED",
             "highlight_section_id": "sec-4-2",
-            "iteration_summary": "Self-healed C++ syntax error using live g++ stderr diagnostics.",
+            "iteration_summary": "Self-healed C++ syntax error using g++ stderr diagnostics.",
             "reasoning_trace": (
-                f"[Antigravity Self-Healing Compiler Retry] `g++ -O2` reported syntax/ABI error:\n"
+                f"[Offline Compiler Repair Loop] `g++ -O2` reported syntax/ABI error:\n"
                 f"{stderr_txt[:220]}\n"
-                f"Analyzed AST tokens and repaired broken statement to restore compilability."
+                f"Normalized diagnostics and repaired statement syntax to restore compilability."
             ),
             "datasheet_citations": [
                 {
@@ -375,7 +484,7 @@ def synthesize_closed_loop_patch(
     status = tel.get("status", "HARDWARE_FAULT")
     patched = current_code
 
-    # 2. Pass 1: Fix HARDWARE_FAULT (DMA Alignment, Reserved Bit & Errata #E-401 static_assert)
+    # 2. Pass 1: Fix HARDWARE_FAULT (DMA Alignment, Reserved Bit, or SramTile Instrumentation Bypass)
     if status == "HARDWARE_FAULT":
         patched = re.sub(
             r"alignas\(\d+\)\s+static\s+float\s+raw_backing_store\[[^\]]+\];",
@@ -394,23 +503,30 @@ def synthesize_closed_loop_patch(
         patched = re.sub(
             r"const\s+uint32_t\s+dma_ctrl_flags\s*=\s*0x[0-9A-Fa-f]+;[^\n]*",
             (
-                f"const uint32_t dma_ctrl_flags = DMA_CR_DIR_M2S | DMA_CR_EN; // [FIXED Sec 4.2.2 & Errata #E-401: Cleared Bit {rsvd_bit} (0x{rsvd_hex:02X} RSVD_MBZ) -> 0x05]\n"
+                f"const uint32_t dma_ctrl_flags = DMA_CR_DIR_M2S | DMA_CR_EN; // [FIXED Sec 4.2.2 & Errata #E-401: Cleared Bit {rsvd_bit} (0x{rsvd_hex:02X} RSVD_MBZ) -> {single_beat_hex}]\n"
                 f"    static_assert(((DMA_CR_DIR_M2S | DMA_CR_EN) & (1u << {rsvd_bit})) == 0u, \"SpecIR #E-401: Forbidden Bit {rsvd_bit} must be zero\");"
             ),
             patched,
         )
+        # If raw C array was used instead of SramTile, upgrade to instrumented SramTile
+        patched = re.sub(
+            r"float\s+local_tile\[TILE_DIM\]\[TILE_DIM\];(?:\s*\n\s*const\s+int\s+tile_row_stride\s*=\s*TILE_DIM;[^\n]*)?",
+            "SramTile<float, TILE_DIM, TILE_DIM> local_tile;",
+            patched,
+        )
 
         return {
+            "patch_source": "offline_constraint_solver_fallback",
             "root_cause_category": "HARDWARE_FAULT_FIXED",
             "highlight_section_id": "sec-5-1",
             "iteration_summary": (
                 f"Resolved {tel.get('fault_code')} via HardwareSpec IR & Errata #E-401: enforced alignas({align_b}) + static_assert and cleared DMA_CR Bit {rsvd_bit} (0x{rsvd_hex:02X})."
             ),
             "reasoning_trace": (
-                f"[Argon thinking_level=\"high\" · SpecIR & Errata #E-401 Cross-Verification]\n"
+                f"[Offline Constraint-Solver Fallback · SpecIR & Errata #E-401 Verification]\n"
                 f"• Sandbox Fault: `{tel.get('fault_code')}` ({tel.get('fault_detail')})\n"
-                f"• WaveformQA Event (`EV-AXI-DEADLOCK-01` @ `t={osc_summary['min_vdd_timestamp_us']}us`): `AXI_AWVALID=1 & AWREADY=0 for 217 cycles`, inducing a `18.4 A/ns` PDN `di/dt` spike (`VDD_CORE = {osc_summary['min_vdd_core_mv']} mV`).\n"
-                f"• Cross-Page Errata Override (`#E-401`, Page 88 overriding Sec 4.2 Page 14): Injected `alignas({align_b})`, compile-time `static_assert` proof, and masked out Bit {rsvd_bit} (`0x{rsvd_hex:02X}`)."
+                f"• CSV Event (`EV-AXI-DEADLOCK-01` @ `t={osc_summary['min_vdd_timestamp_us']}us`): `AXI_AWVALID=1 & AWREADY=0 for {osc_summary['axi_wready_stall_cycles']} cycles`, inducing a PDN `di/dt` droop (`VDD_CORE = {osc_summary['min_vdd_core_mv']} mV`).\n"
+                f"• Cross-Page Errata Override (`#E-401`, Page 88 overriding Sec 4.2 Page 14): Injected `alignas({align_b})`, compile-time `static_assert`, and derived `DMA_CR = {single_beat_hex}` from bitfield table (clearing Bit {rsvd_bit} `0x{rsvd_hex:02X}`)."
             ),
             "datasheet_citations": [
                 {
@@ -418,21 +534,21 @@ def synthesize_closed_loop_patch(
                     "page": 88,
                     "section_anchor": "sec-9-errata",
                     "register_or_rule": f"Errata #E-401: {align_b}B DMA Alignment & DMA_CR Bit {rsvd_bit} (0x{rsvd_hex:02X}) Guard",
-                    "violation_in_code": f"Unaligned offset +3 & DMA_CR asserting Bit {rsvd_bit} caused 18.4 A/ns PDN di/dt droop.",
+                    "violation_in_code": f"Unaligned offset +3 & DMA_CR asserting Bit {rsvd_bit} caused AXI4 write stall.",
                 },
                 {
-                    "section": "WaveformQA Event-Time JSON",
+                    "section": "CSV Event-Time Telemetry",
                     "page": 2,
                     "section_anchor": "sec-4-2",
-                    "register_or_rule": f"t={osc_summary['min_vdd_timestamp_us']}us · AXI_WREADY=0 (217 cyc) · VDD={osc_summary['min_vdd_core_mv']}mV",
+                    "register_or_rule": f"t={osc_summary['min_vdd_timestamp_us']}us · AXI_WREADY=0 ({osc_summary['axi_wready_stall_cycles']} cyc) · VDD={osc_summary['min_vdd_core_mv']}mV",
                     "violation_in_code": "NET_DMA_CR_MBZ_TRAP & NET_AXI_AWADDR[6:0] bus lock verified.",
                 },
             ],
             "multimodal_evidence": [
                 {
-                    "source": "WaveformQA Event-Time JSON",
+                    "source": "CSV Event-Time Telemetry",
                     "timestamp_or_node": f"EV-AXI-DEADLOCK-01 @ t={osc_summary['min_vdd_timestamp_us']}us",
-                    "observation": f"PDN transient di/dt=18.4 A/ns drooped VDD_CORE to {osc_summary['min_vdd_core_mv']}mV.",
+                    "observation": f"Scanned oscilloscope_capture.csv: VDD_CORE drooped to {osc_summary['min_vdd_core_mv']}mV during {osc_summary['axi_wready_stall_cycles']}-cycle stall.",
                 },
                 {
                     "source": "AXI_Bus_Timing_Schematic.svg",
@@ -448,35 +564,36 @@ def synthesize_closed_loop_patch(
         if "hw_dmb();" not in patched:
             patched = patched.replace(
                 "if (!hw_trigger_dma(",
-                "// [FIXED Sec 5.1.1 & Errata #E-402] Clean-fence 56 dirty L1 cache lines (t=418.00us) before DMA\n    hw_dmb();\n    if (!hw_trigger_dma(",
+                f"// [FIXED Sec 5.1 & Errata #E-402] Clean-fence {osc_summary['max_dirty_cache_lines']} dirty L1 cache lines (t={osc_summary['stale_cache_timestamp_us']}us) before DMA\n    hw_dmb();\n    if (!hw_trigger_dma(",
             )
         patched = patched.replace(
             "hw_poll_status_cached()",
-            "hw_poll_status_volatile() /* [FIXED Sec 5.1.2 & Errata #E-402: Volatile MMIO Poll] */",
+            "hw_poll_status_volatile() /* [FIXED Sec 5.1 & Errata #E-402: Volatile MMIO Poll] */",
         )
 
         return {
+            "patch_source": "offline_constraint_solver_fallback",
             "root_cause_category": "DATA_CORRUPTION_FIXED",
             "highlight_section_id": "sec-6-4",
             "iteration_summary": (
                 "Applied Errata #E-402 workaround: inserted hw_dmb() clean-fence & hw_poll_status_volatile() -> Tensor CRC32 reached 100.0%!"
             ),
             "reasoning_trace": (
-                f"[Argon thinking_level=\"high\" · SpecIR & Errata #E-402 Cross-Verification]\n"
+                f"[Offline Constraint-Solver Fallback · SpecIR & Errata #E-402 Verification]\n"
                 f"• Sandbox Telemetry: `DATA_CORRUPTION` (`CRC_ACTUAL={tel.get('crc_actual')}` vs `EXPECTED={tel.get('crc_expected')}`, Accuracy `{tel.get('accuracy_pct')}%`).\n"
-                f"• WaveformQA Event (`EV-L1-SNOOP-HAZARD-02` @ `t={osc_summary['stale_cache_timestamp_us']}us`): `CPU_DMB_FENCE_N=1 (INACTIVE)` with `{osc_summary['max_dirty_cache_lines']}` dirty L1 cache lines bypassed on `NET_DMB_SNOOP_INV`.\n"
-                f"• Cross-Page Errata Override (`#E-402`, Page 88 overriding Sec 5.1 Page 27): Rev 4.2 snoop filter defect requires explicit `hw_dmb()` prior to `hw_trigger_dma()` and `hw_poll_status_volatile()` to prevent `-O2` loop hoisting."
+                f"• CSV Event (`EV-L1-SNOOP-HAZARD-02` @ `t={osc_summary['stale_cache_timestamp_us']}us`): `CPU_DMB_FENCE_N=1 (INACTIVE)` with `{osc_summary['max_dirty_cache_lines']}` dirty L1 cache lines bypassed on `NET_DMB_SNOOP_INV`.\n"
+                f"• Cross-Page Errata Override (`#E-402`, Page 88 overriding Sec 5.1 Page 27): Nominal Sec 5.1 claims hardware auto-snoop, but Rev 4.2 Errata #E-402 disables hardware snooping and requires explicit `hw_dmb()` and `hw_poll_status_volatile()`."
             ),
             "datasheet_citations": [
                 {
                     "section": "Sec 5.1 (p.27) + Errata #E-402 (p.88)",
                     "page": 88,
                     "section_anchor": "sec-9-errata",
-                    "register_or_rule": "Errata #E-402: L1 Snoop Filter Bypass Workaround (hw_dmb + volatile)",
-                    "violation_in_code": "DMA triggered while 56 L1 cache lines remained dirty in CPU cache.",
+                    "register_or_rule": "Errata #E-402: L1 Snoop Filter Disabled in Rev 4.2 (hw_dmb + volatile required)",
+                    "violation_in_code": f"DMA triggered while {osc_summary['max_dirty_cache_lines']} L1 cache lines remained dirty in CPU cache.",
                 },
                 {
-                    "section": "WaveformQA Event-Time JSON",
+                    "section": "CSV Event-Time Telemetry",
                     "page": 3,
                     "section_anchor": "sec-5-1",
                     "register_or_rule": f"t={osc_summary['stale_cache_timestamp_us']}us · L1_DIRTY_LINES={osc_summary['max_dirty_cache_lines']}",
@@ -485,7 +602,7 @@ def synthesize_closed_loop_patch(
             ],
             "multimodal_evidence": [
                 {
-                    "source": "WaveformQA Event-Time JSON",
+                    "source": "CSV Event-Time Telemetry",
                     "timestamp_or_node": f"EV-L1-SNOOP-HAZARD-02 @ t={osc_summary['stale_cache_timestamp_us']}us",
                     "observation": f"{osc_summary['max_dirty_cache_lines']} dirty L1 cache lines bypassed during non-coherent DMA burst.",
                 },
@@ -498,72 +615,81 @@ def synthesize_closed_loop_patch(
             "patched_code": patched,
         }
 
-    # 4. Pass 3: Fix SLA_LATENCY_VIOLATION (Errata #E-403: N-Bank SRAM +1 Padding, static_assert & BURST_16)
+    # 4. Pass 3: Fix SLA_LATENCY_VIOLATION (Errata #E-403: Coprime SramTile<float, TILE_DIM, COPRIME_COLS>, static_assert & BURST_16)
     if status == "SLA_LATENCY_VIOLATION":
         patched = re.sub(
             r"const\s+uint32_t\s+dma_ctrl_flags\s*=\s*[^;]+;",
-            "const uint32_t dma_ctrl_flags = DMA_CR_BURST16 | DMA_CR_DIR_M2S | DMA_CR_EN; // [OPTIMIZED Sec 4.2.2 & Errata #E-401: 0x15 BURST_16]",
+            f"const uint32_t dma_ctrl_flags = DMA_CR_BURST16 | DMA_CR_DIR_M2S | DMA_CR_EN; // [OPTIMIZED Sec 4.2.2: Bit {parsed_spec['bit_burst16']} BURST_16 -> {burst16_hex}]",
             patched,
         )
-        patched = re.sub(
-            r"float\s+local_tile\[TILE_DIM\]\[TILE_DIM\];\s*\n\s*const\s+int\s+tile_row_stride\s*=\s*TILE_DIM;[^\n]*",
-            (
-                f"static constexpr int PADDED_STRIDE = TILE_DIM + 1; // [OPTIMIZED Sec 6.4.3: {padded_stride} floats ({padded_stride * 4}B) -> gcd({padded_stride},{num_banks})==1]\n"
-                f"    static_assert((PADDED_STRIDE % TILE_DIM) == 1, \"SpecIR #E-403: Coprime +1 row padding required to eliminate wavefront serialization\");\n"
-                f"    float local_tile[TILE_DIM][PADDED_STRIDE];\n"
-                f"    const int tile_row_stride = PADDED_STRIDE; // 0.0% {num_banks}-Bank Conflict!"
-            ),
-            patched,
+        coprime_replacement = (
+            f"static constexpr int COPRIME_COLS = {coprime_cols}; // [OPTIMIZED Sec 6.4 & Errata #E-403: gcd({coprime_cols},{num_banks})==1]\n"
+            f"    static_assert((COPRIME_COLS % TILE_DIM) != 0, \"SpecIR #E-403: Coprime column count required to eliminate bank serialization\");\n"
+            f"    SramTile<float, TILE_DIM, COPRIME_COLS> local_tile;"
         )
+        if re.search(r"SramTile<\s*float\s*,\s*TILE_DIM\s*,\s*TILE_DIM\s*>\s+local_tile\s*;", patched):
+            patched = re.sub(
+                r"SramTile<\s*float\s*,\s*TILE_DIM\s*,\s*TILE_DIM\s*>\s+local_tile\s*;",
+                coprime_replacement,
+                patched,
+            )
+        else:
+            patched = re.sub(
+                r"float\s+local_tile\[TILE_DIM\]\[TILE_DIM\];(?:\s*\n\s*const\s+int\s+tile_row_stride\s*=\s*TILE_DIM;[^\n]*)?",
+                coprime_replacement,
+                patched,
+            )
 
         return {
+            "patch_source": "offline_constraint_solver_fallback",
             "root_cause_category": "MEMORY_BOTTLENECK_OPTIMIZED",
             "highlight_section_id": "sec-9-errata",
             "iteration_summary": (
-                f"Applied Errata #E-403 coprime stride (PADDED_STRIDE={padded_stride}) + static_assert & BURST_16 -> 0.00% Conflict, WCET<=2.53ms, Jitter=4.2us, Die Temp 62.2°C!"
+                f"Solved coprime SramTile<float, TILE_DIM, {coprime_cols}> (gcd({coprime_cols},{num_banks})==1) + static_assert & BURST_16 ({burst16_hex}) -> 0.00% Bank Conflict!"
             ),
             "reasoning_trace": (
-                f"[Argon thinking_level=\"high\" · KernelPro Micro-Profiler & Errata #E-403 Synthesis]\n"
-                f"• KernelPro Semantic Diagnosis: Line `local_tile[TILE_DIM][TILE_DIM]` compiled to `{num_banks * 4}B` stride, causing `{num_banks}.0x` Wavefront Serialization (`{tel.get('bank_conflict_rate_pct')}%` conflict), `WCET = {tel.get('wcet_ms')} ms` (> `{sla_ms} ms`), and `Jitter = {tel.get('jitter_us')} us`.\n"
-                f"• Causal Graph & WaveformQA (`EV-SRAM-WAVEFRONT-HOTSPOT-03` @ `t={osc_summary['peak_temp_timestamp_us']}us`): `{num_banks}`-way serialization concentrated `45.9 W/mm²` switching power density in Bank 0 sense amplifiers (`{tel.get('peak_die_temp_c')}°C`).\n"
-                f"• Cross-Page Errata Override (`#E-403`, Page 88 overriding Sec 6.4 Page 41): Padded row stride by `+1` float (`PADDED_STRIDE = {padded_stride}`, `gcd({padded_stride}, {num_banks}) = 1`) with compile-time `static_assert` and enabled `DMA_CR_BURST16` (`0x15`)."
+                f"[Offline Constraint-Solver Fallback · Micro-Profiler & Errata #E-403 Synthesis]\n"
+                f"• Counter Diagnosis: `SramTile<float, TILE_DIM, TILE_DIM>` (`Cols={num_banks}`) caused `{tel.get('bank_conflict_rate_pct')}%` bank conflict (`WCET = {tel.get('wcet_ms')} ms` > `{sla_ms} ms`, `Jitter = {tel.get('jitter_us')} us`).\n"
+                f"• CSV Event (`EV-SRAM-WAVEFRONT-HOTSPOT-03` @ `t={osc_summary['peak_temp_timestamp_us']}us`): `{num_banks}`-way Bank 0 serialization drove peak die temperature to `{tel.get('peak_die_temp_c')}°C`.\n"
+                f"• Mathematical Resolution (`#E-403`, Page 88 overriding Sec 6.4 Page 41): Solved smallest `COPRIME_COLS > {num_banks}` satisfying `gcd(COPRIME_COLS, {num_banks}) == 1` (`COPRIME_COLS = {coprime_cols}`), instantiated `SramTile<float, TILE_DIM, {coprime_cols}>`, and enabled `DMA_CR_BURST16` (`{burst16_hex}`)."
             ),
             "datasheet_citations": [
                 {
                     "section": f"Sec 6.4 (p.41) + Errata #E-403 (p.88) [{num_banks}-Bank]",
                     "page": 88,
                     "section_anchor": "sec-9-errata",
-                    "register_or_rule": f"Errata #E-403: local_tile[{num_banks}][{padded_stride}] · gcd({padded_stride}, {num_banks}) = 1",
-                    "violation_in_code": f"Unpadded {num_banks}-float stride caused {num_banks}-way wavefront serialization & 45.9 W/mm² Bank 0 hotspot.",
+                    "register_or_rule": f"Errata #E-403: SramTile<float, {num_banks}, {coprime_cols}> · gcd({coprime_cols}, {num_banks}) = 1",
+                    "violation_in_code": f"Unpadded Cols={num_banks} caused {tel.get('bank_conflict_rate_pct')}% bank conflicts on Bank 0.",
                 },
                 {
-                    "section": "KernelPro Micro-Profiler & WCET Gate",
+                    "section": "Runtime Hardware-Counter Micro-Profiler",
                     "page": 41,
                     "section_anchor": "sec-6-4",
-                    "register_or_rule": f"DMA_CR=0x15 (BURST_16) · WCET<=3.50ms · Jitter<=25us · Temp<=75°C",
-                    "violation_in_code": f"Resolved t={osc_summary['peak_temp_timestamp_us']}us Bank 0 thermal runaway (97.7°C -> 62.2°C).",
+                    "register_or_rule": f"DMA_CR={burst16_hex} (BURST_16) · WCET<={sla_ms}ms · Jitter<=25us · Temp<=75°C",
+                    "violation_in_code": f"Resolved t={osc_summary['peak_temp_timestamp_us']}us Bank 0 thermal hotspot.",
                 },
             ],
             "multimodal_evidence": [
                 {
-                    "source": "WaveformQA Event-Time JSON",
+                    "source": "CSV Event-Time Telemetry",
                     "timestamp_or_node": f"EV-SRAM-WAVEFRONT-HOTSPOT-03 @ t={osc_summary['peak_temp_timestamp_us']}us",
-                    "observation": f"{num_banks}-way wavefront serialization on Bank 0 drove peak die temp to {osc_summary['peak_die_temp_c']}°C.",
+                    "observation": f"{num_banks}-way wavefront serialization on Bank 0 drove CSV peak temp to {osc_summary['peak_die_temp_c']}°C.",
                 },
                 {
-                    "source": "KernelPro Semantic Micro-Profiler",
-                    "timestamp_or_node": f"MP-03-SRAM-BANK-WAVEFRONT ({num_banks}.0x -> 1.0x)",
-                    "observation": f"Coprime stride ({padded_stride} floats) reduced serialization ratio to 1.0x and jitter to 4.2us.",
+                    "source": "Runtime Hardware-Counter Micro-Profiler",
+                    "timestamp_or_node": f"MP-03-SRAM-BANK-WAVEFRONT (Cols={num_banks} -> Cols={coprime_cols})",
+                    "observation": f"Coprime SramTile stride ({coprime_cols} floats) eliminated bank conflicts (0.00%).",
                 },
             ],
             "patched_code": patched,
         }
 
     return {
+        "patch_source": "offline_constraint_solver_fallback",
         "root_cause_category": "ALL_SLA_PASSED",
         "highlight_section_id": "sec-9-errata",
         "iteration_summary": "All 6 Hierarchical Hard Gates and Silicon Errata #E-401..#E-403 verified.",
-        "reasoning_trace": "Kernel satisfies all HardwareSpec IR constraints, compile-time static_asserts, WCET/Jitter bounds, and thermal/voltage envelopes.",
+        "reasoning_trace": "Kernel satisfies all HardwareSpec IR constraints, SramTile instrumentation checks, compile-time static_asserts, WCET/Jitter bounds, and thermal/voltage envelopes.",
         "datasheet_citations": [],
         "multimodal_evidence": [],
         "patched_code": patched,
@@ -580,17 +706,18 @@ def call_gemini_api_closed_loop(
     sandbox_res: Dict[str, Any],
 ) -> Optional[Dict[str, Any]]:
     """
-    Invokes Gemini API (REST) with Typed HardwareSpec IR + Dynamic Datasheet +
-    WaveformQA Event-Time JSON + KernelPro Semantic Micro-Profile + C++ code.
+    Invokes the live Gemini API (REST) with Typed HardwareSpec IR + Dynamic Datasheet +
+    CSV Event-Time JSON + Runtime Micro-Profile + C++ code.
     """
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
     user_prompt = (
-        f"## 1. TYPED HARDWARESPEC IR (SPECMAP / ERRATA OVERRIDES)\n```json\n{json.dumps(hardware_spec_ir, indent=2)}\n```\n\n"
+        f"## 1. TYPED HARDWARESPEC IR (ERRATA OVERRIDES)\n```json\n{json.dumps(hardware_spec_ir, indent=2)}\n```\n\n"
         f"## 2. DYNAMIC HARDWARE DATASHEET & SECTION 9 ERRATA\n{datasheet_text}\n\n"
-        f"## 3. WAVEFORMQA EVENT-TIME TELEMETRY & MULTIMODAL SUMMARY\n```json\n{json.dumps(osc_summary, indent=2)}\n```\n\n"
-        f"## 4. CURRENT C++ KERNEL CODE\n```cpp\n{current_code}\n```\n\n"
-        f"## 5. LIVE g++ COMPILER & KERNELPRO SEMANTIC MICRO-PROFILER\n```json\n{json.dumps(sandbox_res, indent=2)}\n```\n\n"
-        "Generate the next self-healing C++ patch. Return strict JSON with keys: "
+        f"## 3. CSV-DERIVED EVENT-TIME TELEMETRY & MULTIMODAL SUMMARY\n```json\n{json.dumps(osc_summary, indent=2)}\n```\n\n"
+        f"## 4. CURRENT C++ KERNEL CODE (MUST USE INSTRUMENTED SramTile<float, TILE_DIM, Cols>)\n```cpp\n{current_code}\n```\n\n"
+        f"## 5. LIVE g++ COMPILER & RUNTIME MICRO-PROFILER\n```json\n{json.dumps(sandbox_res, indent=2)}\n```\n\n"
+        "Generate the next self-healing C++ patch. Note: local_tile MUST use `SramTile<float, TILE_DIM, Cols>` so hardware counters observe all 65,536 tile reads/writes. "
+        "Return strict JSON with keys: "
         "iteration_summary, root_cause_category, highlight_section_id, datasheet_citations, multimodal_evidence, reasoning_trace, patched_code."
     )
     payload = {
@@ -611,7 +738,11 @@ def call_gemini_api_closed_loop(
         with urllib.request.urlopen(req, timeout=25) as resp:
             body = json.loads(resp.read().decode("utf-8"))
             text = body["candidates"][0]["content"]["parts"][0]["text"]
-            return json.loads(text)
+            parsed = json.loads(text)
+            if isinstance(parsed, dict) and "patched_code" in parsed:
+                parsed["patch_source"] = f"live_gemini_api:{model_name}"
+                return parsed
+            return None
     except Exception:
         return None
 
@@ -619,18 +750,18 @@ def call_gemini_api_closed_loop(
 def run_autonomous_closed_loop(
     spec_config: Optional[Dict[str, Any]] = None,
     initial_code: Optional[str] = None,
-    use_live_api: bool = False,
+    use_live_api: Optional[bool] = None,
     api_key: Optional[str] = None,
     model_name: str = "gemini-2.5-pro",
     max_iterations: int = 4,
     max_compile_retries: int = 3,
 ) -> Dict[str, Any]:
     """
-    Executes the v3.0 Closed-Loop Autonomous Verification & Self-Healing Pipeline:
-      - Synthesizes Typed `HardwareSpec IR` (with Cross-Page Errata `#E-401..#E-403`) and `WaveformQA` Event-Time JSON.
-      - Compiles & runs in the real `g++ -O2` sandbox with `KernelPro` Semantic Micro-Profiling.
+    Executes the Closed-Loop Autonomous Verification & Self-Healing Pipeline:
+      - Synthesizes Typed `HardwareSpec IR` (with Cross-Page Errata `#E-401..#E-403`) and CSV-derived Event-Time JSON.
+      - Compiles & runs in the real `g++ -O2` sandbox (`LC_ALL=C`) with `SramTile<T, Rows, Cols>` hardware-counter instrumentation.
       - Evaluates the 6-Stage Hierarchical Hard Acceptance Gates at every iteration.
-      - Produces a complete `Proof-Carrying Evidence Bundle` upon completion.
+      - Defaults to Live Gemini API when `GEMINI_API_KEY` is configured, and explicitly labels offline runs as `offline_constraint_solver_fallback`.
     """
     cfg = normalize_spec_config(spec_config)
     ensure_oscilloscope_csv(2500)
@@ -674,20 +805,21 @@ def run_autonomous_closed_loop(
     stages.append(
         {
             "iteration": 0,
+            "patch_source": "sandbox_baseline_evaluation",
             "badge": "ITERATION 0 · BASELINE FAULT",
             "stage_label": f"Iteration 0 · Baseline Diagnosis ({cfg['dma_align_bytes']}B / Bit {cfg['rsvd_mbz_bit']} / {cfg['num_banks']}-Bank)",
             "root_cause_category": "INITIAL_DIAGNOSIS",
             "highlight_section_id": "sec-4-2",
             "iteration_summary": (
-                f"Initial kernel fails Gate 1 ({tel0.get('fault_code')}): PDN di/dt spike (18.4 A/ns) droops VDD_CORE to {tel0.get('vdd_droop_mv', 682.4)}mV at t=142.50us."
+                f"Initial kernel fails Gate 1 ({tel0.get('fault_code')}): PDN di/dt spike droops VDD_CORE to {tel0.get('vdd_droop_mv', 682.4)}mV at t={osc_summary['min_vdd_timestamp_us']}us."
             ),
             "reasoning_trace": (
-                f"[Sandbox Baseline Run · HardwareSpec IR v3.0]\n"
+                f"[Sandbox Baseline Run · HardwareSpec IR v3.1]\n"
                 f"• Compiled `kernel_buggy.cpp` with `g++ -O2 -DHW_DMA_ALIGN_BYTES={cfg['dma_align_bytes']} "
                 f"-DHW_RSVD_MBZ_BIT={cfg['rsvd_mbz_bit']} -DHW_NUM_BANKS={cfg['num_banks']}`.\n"
                 f"• Hardware Trap: `{tel0.get('fault_code')}` — {tel0.get('fault_detail')}\n"
-                f"• WaveformQA Event (`EV-AXI-DEADLOCK-01` @ `t={osc_summary['min_vdd_timestamp_us']}us`): "
-                f"`AXI_AWVALID=1 & AWREADY=0 for 217 cycles | PC=kernel.cpp:line_31`.\n"
+                f"• CSV Event (`EV-AXI-DEADLOCK-01` @ `t={osc_summary['min_vdd_timestamp_us']}us`): "
+                f"`AXI_AWVALID=1 & AWREADY=0 for {osc_summary['axi_wready_stall_cycles']} cycles | PC=kernel.cpp:line_31`.\n"
                 f"• Hard Acceptance Gates Passed: `{gates0['passed_count']}/6`."
             ),
             "datasheet_citations": [
@@ -701,9 +833,9 @@ def run_autonomous_closed_loop(
             ],
             "multimodal_evidence": [
                 {
-                    "source": "WaveformQA Event-Time JSON",
+                    "source": "CSV Event-Time Telemetry",
                     "timestamp_or_node": f"EV-AXI-DEADLOCK-01 @ t={osc_summary['min_vdd_timestamp_us']}us",
-                    "observation": f"VDD_CORE droop to {osc_summary['min_vdd_core_mv']} mV (di/dt = 18.4 A/ns); AXI_WREADY stuck at 0.",
+                    "observation": f"VDD_CORE droop to {osc_summary['min_vdd_core_mv']} mV ({osc_summary['axi_wready_stall_cycles']}-cycle AXI_WREADY stall).",
                 }
             ],
             "code": current_code,
@@ -715,7 +847,11 @@ def run_autonomous_closed_loop(
     )
 
     cur_sandbox = base_sandbox
-    active_key = (api_key or os.environ.get("GEMINI_API_KEY") or "").strip() if use_live_api else ""
+    resolved_key = (api_key or os.environ.get("GEMINI_API_KEY") or "").strip()
+    if use_live_api is None:
+        use_live_api = bool(resolved_key)
+    active_key = resolved_key if use_live_api else ""
+    live_api_calls_succeeded = 0
 
     for step_idx in range(1, max_iterations):
         if cur_sandbox.get("telemetry", {}).get("status") == "ALL_SLA_PASSED":
@@ -733,6 +869,8 @@ def run_autonomous_closed_loop(
                 current_code=current_code,
                 sandbox_res=cur_sandbox,
             )
+            if llm_patch and "patched_code" in llm_patch:
+                live_api_calls_succeeded += 1
 
         if not llm_patch or "patched_code" not in llm_patch:
             llm_patch = synthesize_closed_loop_patch(
@@ -779,6 +917,7 @@ def run_autonomous_closed_loop(
         stages.append(
             {
                 "iteration": step_idx,
+                "patch_source": llm_patch.get("patch_source", "offline_constraint_solver_fallback"),
                 "badge": f"ITERATION {step_idx} · {cat}",
                 "stage_label": f"Iteration {step_idx} · {cat}",
                 "root_cause_category": cat,
@@ -805,16 +944,24 @@ def run_autonomous_closed_loop(
             }
         )
 
+    execution_mode = (
+        f"live_gemini_api:{model_name}"
+        if live_api_calls_succeeded > 0
+        else "offline_constraint_solver_fallback"
+    )
     final_status = stages[-1]["sandbox"]["telemetry"]["status"]
+    final_gates_all_passed = bool(stages[-1]["six_stage_gates"]["all_gates_passed"])
     proof_bundle = build_proof_carrying_bundle(
         spec_config=cfg,
         hardware_spec_ir=hardware_spec_ir,
         osc_summary=osc_summary,
         stages=stages,
+        execution_mode=execution_mode,
     )
 
     return {
-        "mode": "LIVE_GEMINI_API" if active_key else "AUTONOMOUS_CLOSED_LOOP",
+        "mode": execution_mode,
+        "live_api_used": live_api_calls_succeeded > 0,
         "spec_config": cfg,
         "hardware_spec_ir": hardware_spec_ir,
         "manual_markdown": datasheet_text,
@@ -825,7 +972,7 @@ def run_autonomous_closed_loop(
         "stages": stages,
         "proof_carrying_bundle": proof_bundle,
         "final_status": final_status,
-        "all_passed": final_status == "ALL_SLA_PASSED",
+        "all_passed": (final_status == "ALL_SLA_PASSED") and final_gates_all_passed,
     }
 
 

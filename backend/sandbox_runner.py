@@ -1,5 +1,6 @@
 import difflib
 import json
+import math
 import os
 import re
 import shutil
@@ -35,11 +36,11 @@ def normalize_spec_config(spec_config: Optional[Dict[str, Any]] = None) -> Dict[
 
 
 def find_gpp_compiler() -> str:
-    """Locate g++ executable on Windows / MSYS2 / PATH."""
+    """Locate g++ executable on Linux / macOS / Windows / MSYS2 / PATH."""
     candidates = [
+        shutil.which("g++"),
         r"C:\msys64\mingw64\bin\g++.exe",
         r"C:\msys64\ucrt64\bin\g++.exe",
-        shutil.which("g++"),
         shutil.which("clang++"),
     ]
     for c in candidates:
@@ -73,25 +74,27 @@ def build_semantic_micro_profile(
     spec_config: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
-    KernelPro & NVIDIA Nsight Compute Style Semantic Micro-Profiler:
-    Maps source C++ line numbers <-> compiled memory access stride <-> wavefront/bank-conflict
-    serialization ratio <-> hardware stall root causes and Silicon Errata (#E-401..#E-403).
+    Instrumented Cycle & Bank-Conflict Profiler:
+    Maps source C++ line numbers <-> observed SramTile<T, R, C> stride <-> wavefront/bank-conflict
+    serialization ways <-> hardware stall causes.
     """
     lines = kernel_code.splitlines()
     num_banks = int(spec_config.get("num_banks", 8))
     align_b = int(spec_config.get("dma_align_bytes", 64))
     rsvd_bit = int(spec_config.get("rsvd_mbz_bit", 7))
 
-    line_dma_buf = _find_line_number(lines, "raw_backing_store", 16)
-    line_dma_ctrl = _find_line_number(lines, "dma_ctrl_flags", 23)
-    line_dma_trig = _find_line_number(lines, "hw_trigger_dma", 26)
-    line_dma_poll = _find_line_number(lines, "hw_poll_status", 31)
-    line_sram_tile = _find_line_number(lines, "local_tile", 36)
-    line_sram_gather = _find_line_number(lines, "hw_record_8lane_sram_access", 53)
+    line_dma_buf = _find_line_number(lines, "raw_backing_store", 10)
+    line_dma_ctrl = _find_line_number(lines, "dma_ctrl_flags", 16)
+    line_dma_trig = _find_line_number(lines, "hw_trigger_dma", 19)
+    line_dma_poll = _find_line_number(lines, "hw_poll_status", 24)
+    line_sram_tile = _find_line_number(lines, "local_tile", 30)
+    line_sram_gather = _find_line_number(lines, "dram_out[", 46)
 
-    has_padded_stride = ("PADDED_STRIDE" in kernel_code) or ("TILE_DIM + 1" in kernel_code)
-    compiled_stride_floats = (num_banks + 1) if has_padded_stride else num_banks
+    observed_cols = int(telemetry.get("observed_tile_cols", 0))
+    sram_bypass = bool(telemetry.get("sram_bypass_detected", False))
+    compiled_stride_floats = observed_cols if observed_cols > 0 else num_banks
     compiled_stride_bytes = compiled_stride_floats * 4
+    stride_gcd = math.gcd(compiled_stride_floats, num_banks) if compiled_stride_floats > 0 else num_banks
 
     status = telemetry.get("status", "HARDWARE_FAULT")
     conflict_pct = float(telemetry.get("bank_conflict_rate_pct", 0.0))
@@ -103,6 +106,8 @@ def build_semantic_micro_profile(
 
     if status == "COMPILE_ERROR":
         primary_stall = "COMPILER_SYNTAX_OR_STATIC_ASSERT_FAILURE"
+    elif sram_bypass:
+        primary_stall = "SRAM_TILE_INSTRUMENTATION_BYPASS_DETECTED"
     elif status == "HARDWARE_FAULT":
         primary_stall = "AXI4_ARBITER_DEADLOCK_AND_PDN_DI_DT_TRAP"
     elif status == "DATA_CORRUPTION":
@@ -119,12 +124,12 @@ def build_semantic_micro_profile(
             "hardware_unit": "AXI4_DMA_ENGINE & PDN_REGULATOR",
             "errata_ref": "#E-401 (Overrides Sec 4.2, p.88)",
             "compiled_property": f"alignas({telemetry.get('declared_dst_align', 16)}) | DMA_CR={telemetry.get('dma_cr_hex', '0x00')}",
-            "wavefront_serialization_ratio": "DEADLOCK" if status == "HARDWARE_FAULT" else ("1.0x (16-Beat Burst)" if burst16_ok else "8.2x (Single-Beat Stall)"),
-            "stall_contribution_pct": 100.0 if status == "HARDWARE_FAULT" else (26.4 if not burst16_ok else 3.8),
+            "wavefront_serialization_ratio": "DEADLOCK" if (status == "HARDWARE_FAULT" and not sram_bypass) else ("1.0x (16-Beat Burst)" if burst16_ok else "6.0x (Single-Beat Stall)"),
+            "stall_contribution_pct": 100.0 if (status == "HARDWARE_FAULT" and not sram_bypass) else (26.4 if not burst16_ok else 3.8),
             "stall_reason": (
-                f"Violates {align_b}B alignment or asserts DMA_CR Bit {rsvd_bit} -> 18.4 A/ns di/dt spike & 682.4mV VDD droop"
-                if status == "HARDWARE_FAULT"
-                else ("Single-beat AXI transfers (BURST_16=0)" if not burst16_ok else f"Compliant {align_b}B aligned 16-beat burst (0x15)")
+                f"Violates {align_b}B alignment or asserts DMA_CR Bit {rsvd_bit}"
+                if (status == "HARDWARE_FAULT" and not sram_bypass)
+                else ("Single-beat AXI transfers (BURST_16=0)" if not burst16_ok else f"Compliant {align_b}B aligned 16-beat burst")
             ),
             "passed": (status != "HARDWARE_FAULT") and dst_aligned_ok and burst16_ok,
         },
@@ -137,7 +142,7 @@ def build_semantic_micro_profile(
             "wavefront_serialization_ratio": "1.0x",
             "stall_contribution_pct": 0.0 if (dmb_ok and vol_ok) else 15.0,
             "stall_reason": (
-                "56 dirty L1 cache lines bypassed on NET_DMB_SNOOP_INV (t=418.00us) & non-volatile -O2 poll"
+                "56 dirty L1 cache lines bypassed on NET_DMB_SNOOP_INV & non-volatile -O2 poll"
                 if not (dmb_ok and vol_ok)
                 else "Explicit hw_dmb() clean-fence + hw_poll_status_volatile() active"
             ),
@@ -148,15 +153,27 @@ def build_semantic_micro_profile(
             "source_location": f"kernel.cpp:{line_sram_tile},{line_sram_gather}",
             "hardware_unit": f"{num_banks}_BANK_SRAM_CROSSBAR & BANK0_SENSE_AMP",
             "errata_ref": "#E-403 (Overrides Sec 6.4, p.88)",
-            "compiled_property": f"row_stride={compiled_stride_floats} floats ({compiled_stride_bytes}B) | gcd({compiled_stride_floats},{num_banks})={1 if has_padded_stride else num_banks}",
-            "wavefront_serialization_ratio": f"{wavefront_ways}.0x ({wavefront_ways}-Way Bank 0 Serialization)" if conflict_pct > 5.0 else "1.0x (Conflict-Free Parallel)",
-            "stall_contribution_pct": 73.6 if conflict_pct > 5.0 else 0.0,
-            "stall_reason": (
-                f"Unpadded {compiled_stride_bytes}B stride routes all {num_banks} vector lanes to Bank 0 ({conflict_pct:.2f}% conflict, 12-cycle/way stall, {telemetry.get('peak_die_temp_c', 97.7):.1f}C hotspot)"
-                if conflict_pct > 5.0
-                else f"Coprime +1 padded stride ({compiled_stride_floats} floats = {compiled_stride_bytes}B) achieves 0.00% conflict & {telemetry.get('peak_die_temp_c', 62.2):.1f}C uniform die temp"
+            "compiled_property": (
+                "BYPASSED_UNINSTRUMENTED_ARRAY"
+                if sram_bypass
+                else f"SramTile<float,{telemetry.get('observed_tile_rows', num_banks)},{compiled_stride_floats}> ({compiled_stride_bytes}B) | gcd({compiled_stride_floats},{num_banks})={stride_gcd}"
             ),
-            "passed": (status == "ALL_SLA_PASSED") and (conflict_pct == 0.0),
+            "wavefront_serialization_ratio": (
+                "BYPASS_FAULT"
+                if sram_bypass
+                else (f"{wavefront_ways}.0x ({wavefront_ways}-Way Bank Collision)" if conflict_pct > 5.0 else "1.0x (Conflict-Free Parallel)")
+            ),
+            "stall_contribution_pct": 100.0 if sram_bypass else (73.6 if conflict_pct > 5.0 else 0.0),
+            "stall_reason": (
+                "Kernel bypassed SramTile<T, R, C> instrumentation"
+                if sram_bypass
+                else (
+                    f"Unpadded {compiled_stride_bytes}B stride routes {wavefront_ways} vector lanes to same bank ({conflict_pct:.2f}% conflict, {telemetry.get('peak_die_temp_c', 97.7):.1f}C hotspot)"
+                    if conflict_pct > 5.0
+                    else f"Coprime stride ({compiled_stride_floats} floats = {compiled_stride_bytes}B) achieves 0.00% conflict & {telemetry.get('peak_die_temp_c', 62.2):.1f}C uniform die temp"
+                )
+            ),
+            "passed": (status == "ALL_SLA_PASSED") and (not sram_bypass) and (conflict_pct == 0.0),
         },
     ]
 
@@ -168,8 +185,8 @@ def build_semantic_micro_profile(
         d["stall_root_cause"] = ("RESOLVED: " if d["passed"] else "STALL: ") + d["stall_reason"]
 
     return {
-        "profiler_engine": "KernelPro-Nsight-SemanticMicroProfiler/v3.0",
-        "profiler_schema": "KernelPro-Nsight-SemanticMicroProfiler/v3.0",
+        "profiler_engine": "Instrumented-SramTile-Profiler/v3.1",
+        "profiler_schema": "Instrumented-SramTile-Profiler/v3.1",
         "primary_stall_reason": primary_stall,
         "dominant_bottleneck": primary_stall,
         "compiled_stride_floats": compiled_stride_floats,
@@ -189,8 +206,8 @@ def compile_and_run_kernel(
 ) -> Dict[str, Any]:
     """
     Compiles the candidate C++ kernel with hw_emulator_harness.cpp using g++ -O2
-    and dynamic hardware spec macros (-DHW_*), then executes the binary in the sandbox
-    and attaches the KernelPro Semantic Micro-Profile.
+    and dynamic hardware spec macros (-DHW_*), forces POSIX C locale (`LC_ALL=C`)
+    so compiler diagnostics are identical across Linux/macOS/Windows, and runs the binary.
     """
     cfg = normalize_spec_config(spec_config)
     align_b = cfg["dma_align_bytes"]
@@ -211,6 +228,9 @@ def compile_and_run_kernel(
     env = os.environ.copy()
     if os.path.isdir(gpp_dir):
         env["PATH"] = gpp_dir + os.pathsep + env.get("PATH", "")
+    # Enforce POSIX C locale so Linux/macOS g++ emits standard ASCII quotes in stderr
+    env["LC_ALL"] = "C"
+    env["LANG"] = "C"
 
     m_align = re.search(r"alignas\s*\(\s*(\d+)\s*\)", kernel_code)
     kernel_declared_align = int(m_align.group(1)) if m_align else 16
@@ -235,7 +255,7 @@ def compile_and_run_kernel(
         str(exe_path),
     ]
 
-    display_cmd = f"g++ -O2 -std=c++17 {' '.join(macro_flags)} -Igolden_dataset kernel_{step_id}.cpp hw_emulator_harness.cpp"
+    display_cmd = f"LC_ALL=C g++ -O2 -std=c++17 {' '.join(macro_flags)} -Igolden_dataset kernel_{step_id}.cpp hw_emulator_harness.cpp"
 
     t0 = time.perf_counter()
     try:

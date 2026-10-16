@@ -25,10 +25,9 @@ void run_hx9000_tensor_kernel(const float* dram_in, float* dram_out, float alpha
         // Busy wait
     }
 
-    // [BUG 3] Unpadded Local SRAM Tile (Stride = TILE_DIM floats)
-    // Violates Manual Sec 6.4.2: Column-wise access hits the exact same SRAM bank across all rows!
-    float local_tile[TILE_DIM][TILE_DIM];
-    const int tile_row_stride = TILE_DIM; // Unpadded -> N-way Bank Conflict!
+    // [BUG 3] Unpadded Local SRAM Tile: SramTile<float, TILE_DIM, TILE_DIM> (Row Stride = TILE_DIM words)
+    // Violates Manual Sec 6.4.2: Column-wise read hits the exact same SRAM bank across all rows!
+    SramTile<float, TILE_DIM, TILE_DIM> local_tile;
 
     for (int tr = 0; tr < MATRIX_DIM; tr += TILE_DIM) {
         for (int tc = 0; tc < MATRIX_DIM; tc += TILE_DIM) {
@@ -36,25 +35,16 @@ void run_hx9000_tensor_kernel(const float* dram_in, float* dram_out, float alpha
             // Step A: Load tile row-wise into Local Interleaved SRAM
             for (int r = 0; r < TILE_DIM; ++r) {
                 for (int c = 0; c < TILE_DIM; ++c) {
-                    local_tile[r][c] = sram_staging[(tr + r) * MATRIX_DIM + (tc + c)];
+                    local_tile(r, c) = sram_staging[(tr + r) * MATRIX_DIM + (tc + c)];
                 }
             }
-            int row_init_lanes[TILE_DIM];
-            for (int i = 0; i < TILE_DIM; ++i) {
-                row_init_lanes[i] = i;
-            }
-            hw_record_8lane_sram_access(row_init_lanes);
 
             // Step B: Column-Wise Transpose & Scale-Bias Read from Local SRAM
             for (int c = 0; c < TILE_DIM; ++c) {
-                int col_lanes[TILE_DIM];
                 for (int r = 0; r < TILE_DIM; ++r) {
-                    col_lanes[r] = r * tile_row_stride + c;
-                    float v = local_tile[r][c];
+                    float v = local_tile(r, c);
                     dram_out[(tc + c) * MATRIX_DIM + (tr + r)] = v * alpha + 1.0f;
                 }
-                hw_record_8lane_sram_access(col_lanes);
-                hw_record_8lane_sram_access(col_lanes);
             }
         }
     }

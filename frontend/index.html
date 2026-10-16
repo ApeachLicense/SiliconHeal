@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SiliconHeal v3.0 · Autonomous Hardware-Spec IR & Proof-Carrying Kernel Self-Healing Agent</title>
+  <title>SiliconHeal · Hardware-Spec IR &amp; Instrumented g++ Sandbox Kernel Self-Healing</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -63,20 +63,23 @@
         SH
       </div>
       <div>
-        <div class="flex items-center gap-2">
-          <h1 class="font-bold text-sm tracking-tight text-white">SiliconHeal <span class="text-cyan-400 mono text-xs">v3.0</span></h1>
+        <div class="flex items-center gap-2 flex-wrap">
+          <h1 class="font-bold text-sm tracking-tight text-white">SiliconHeal <span class="text-cyan-400 mono text-xs">v3.1</span></h1>
           <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-full">
             Track 2 · Hard Tech
           </span>
           <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded-full mono">
-            SpecMap IR · Errata Override · KernelPro · 6-Stage Gate
+            HardwareSpec IR · Errata Override · SramTile Proxy · 6-Stage Gate
           </span>
           <span id="active-spec-pill" class="px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 rounded-full mono">
             SPEC: 64B Align | Bit 7 RSVD | 8-Bank SRAM
           </span>
+          <span id="synthesis-mode-pill" class="px-2 py-0.5 text-[10px] font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30 rounded-full mono">
+            MODE: CHECKING...
+          </span>
         </div>
         <p class="text-[11px] text-slate-400">
-          Typed <code class="text-amber-300">HardwareSpec IR</code> + Cross-Page <code class="text-rose-300">Errata #E-401..#E-403</code> + <code class="text-cyan-300">WaveformQA</code> Event-Time JSON + Native <code class="text-emerald-300">g++ -O2</code> Proof-Carrying Sandbox
+          Typed <code class="text-amber-300">HardwareSpec IR</code> + Cross-Page <code class="text-rose-300">Errata #E-401..#E-403</code> + <code class="text-cyan-300">CSV Event-Time Scanner</code> + Instrumented <code class="text-emerald-300">SramTile&lt;T,R,C&gt; g++ -O2</code> Sandbox
         </p>
       </div>
     </div>
@@ -135,8 +138,8 @@
       <label class="flex items-center gap-1 text-[11px] text-slate-300">
         <span class="text-slate-400">Local SRAM Architecture:</span>
         <select id="mut-banks" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[11px] text-emerald-300 mono">
-          <option value="8" selected>8-Bank (Tile 8×9 Pad)</option>
-          <option value="16">16-Bank (Tile 16×17 Pad)</option>
+          <option value="8" selected>8-Bank (Coprime 8×9)</option>
+          <option value="16">16-Bank (Coprime 16×17)</option>
         </select>
       </label>
 
@@ -157,7 +160,7 @@
   <!-- MAIN 3-COLUMN WORKSPACE -->
   <main class="flex-1 grid grid-cols-12 gap-0 overflow-hidden">
 
-    <!-- LEFT COLUMN (4 cols): 1M-Token Multimodal Hardware Context (Datasheet + Errata + SpecIR + SVG + CSV) -->
+    <!-- LEFT COLUMN (4 cols): Multimodal Hardware Context (Datasheet + Errata + SpecIR + SVG + CSV) -->
     <section class="col-span-4 border-r border-slate-800 flex flex-col bg-slate-900/40 overflow-hidden">
       <div class="px-2.5 py-2 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between gap-1">
         <div class="flex items-center gap-1 flex-wrap">
@@ -165,7 +168,7 @@
             📄 Spec + Errata
           </button>
           <button onclick="switchLeftTab('specir')" id="ltab-specir" class="px-2 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200">
-            🧩 SpecIR &amp; WaveformQA
+            🧩 SpecIR &amp; CSV Events
           </button>
           <button onclick="switchLeftTab('schematic')" id="ltab-schematic" class="px-2 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200">
             📐 Schematic SVG
@@ -187,20 +190,20 @@
             <span class="text-[10px] font-bold uppercase tracking-wider text-amber-400 mono">Section 4.2 · Page 14 (Mutable Spec)</span>
             <span id="badge-sec-4-2" class="text-[10px] mono text-slate-400">OFFSET 0x00 · DMA_CR</span>
           </div>
-          <h3 id="title-sec-4-2" class="text-xs font-bold text-white mb-1">4.2.1 64-Byte DMA Alignment &amp; 4.2.2 DMA_CR Reserved Bit</h3>
+          <h3 id="title-sec-4-2" class="text-xs font-bold text-white mb-1">4.2.1 64-Byte DMA Alignment &amp; 4.2.2 DMA_CR Bitfield</h3>
           <p id="desc-sec-4-2" class="text-[11px] text-slate-300 leading-relaxed mb-1.5">
             Both <code class="text-cyan-300">DMA_SRC_ADDR</code> and <code class="text-cyan-300">DMA_DST_ADDR</code> <strong>MUST be aligned to a <span id="spec-align-txt" class="text-amber-300 font-bold">64</span>-byte boundary</strong> (<code class="text-amber-300">alignas(<span id="spec-align-code">64</span>)</code> at offset <code class="text-emerald-300">[0]</code>). Unaligned transfers trigger <code class="text-rose-400" id="spec-unaligned-err">ERR_DMA_UNALIGNED_64B</code>.
           </p>
           <div class="bg-slate-950 rounded border border-slate-800 p-2 text-[10px] mono space-y-1">
             <div class="grid grid-cols-12 text-rose-300 bg-rose-950/30 p-1 rounded">
-              <div class="col-span-3 font-bold" id="spec-rsvd-bit-col">Bit 7 (0x80)</div>
+              <div class="col-span-3 font-bold" id="spec-rsvd-bit-col">Bit 7</div>
               <div class="col-span-3 font-bold">RSVD_MBZ</div>
-              <div class="col-span-6">MUST BE ZERO! Writing 1 locks AXI4 WREADY=0 (18.4 A/ns PDN di/dt spike → 682.4mV)</div>
+              <div class="col-span-6">MUST BE ZERO! Asserting 1 locks AXI4 WREADY=0 (PDN di/dt droop to 682.4mV)</div>
             </div>
             <div class="grid grid-cols-12 text-emerald-300 p-1">
-              <div class="col-span-3">Bit 4 (0x10)</div>
-              <div class="col-span-3">BURST_16</div>
-              <div class="col-span-6">1 = Enable 16-Beat AXI4 Burst (Overridden by Errata #E-402 without hw_dmb)</div>
+              <div class="col-span-3">Bit 4 / 2 / 0</div>
+              <div class="col-span-3">BURST16|IRQ|EN</div>
+              <div class="col-span-6">Synthesize bitmask from bit positions {4, 2, 0} while keeping RSVD_MBZ cleared</div>
             </div>
           </div>
         </div>
@@ -208,12 +211,12 @@
         <!-- Section 5.1 -->
         <div id="sec-5-1" class="spec-section rounded-lg p-2.5 bg-slate-900/90 border border-slate-800">
           <div class="flex items-center justify-between mb-1">
-            <span class="text-[10px] font-bold uppercase tracking-wider text-cyan-400 mono">Section 5.1 · Page 27</span>
-            <span class="text-[10px] mono text-slate-400">CACHE COHERENCY &amp; MMIO</span>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-cyan-400 mono">Section 5.1 · Page 27 (Nominal Spec)</span>
+            <span class="text-[10px] mono text-rose-400">OVERRIDDEN BY ERRATA #E-402</span>
           </div>
-          <h3 class="text-xs font-bold text-white mb-1">5.1.1 Mandatory <code class="text-cyan-300">hw_dmb()</code> &amp; 5.1.2 Volatile Polling</h3>
+          <h3 class="text-xs font-bold text-white mb-1">5.1.1 Nominal Hardware Auto-Snoop (Rev 1.0–3.x)</h3>
           <p class="text-[11px] text-slate-300 leading-relaxed">
-            The HX-9000 DMA engine is <strong>non-coherent</strong> with CPU L1 D-Cache. Software <strong>MUST execute <code class="text-emerald-300">hw_dmb()</code></strong> immediately prior to <code class="text-cyan-300">hw_trigger_dma()</code> and poll <code class="text-emerald-300">hw_poll_status_volatile()</code>. Omitting <code class="text-emerald-300">hw_dmb()</code> leaves <strong>56 dirty L1 lines</strong> unflushed (<code class="text-amber-300">t=418.00us</code>).
+            Nominal Chapter 5 claims hardware L1 D-Cache auto-snoop is active during 16-beat bursts. <strong>However, Section 9 Errata #E-402 (Page 88) disables the hardware snoop filter on Rev 4.2 silicon</strong>, requiring explicit <code class="text-emerald-300">hw_dmb()</code> before <code class="text-cyan-300">hw_trigger_dma()</code> and <code class="text-emerald-300">hw_poll_status_volatile()</code>.
           </p>
         </div>
 
@@ -223,13 +226,13 @@
             <span class="text-[10px] font-bold uppercase tracking-wider text-purple-400 mono">Section 6.4 · Page 41 (Mutable Bank Spec)</span>
             <span id="spec-bank-badge" class="text-[10px] mono text-slate-400">8-BANK INTERLEAVED SRAM</span>
           </div>
-          <h3 id="title-sec-6-4" class="text-xs font-bold text-white mb-1">6.4.2 N-Bank Stride Trap &amp; 6.4.3 +1 Element Row Padding</h3>
+          <h3 id="title-sec-6-4" class="text-xs font-bold text-white mb-1">6.4.2 N-Bank Crossbar Routing &amp; Coprime Row Stride</h3>
           <p class="text-[11px] text-slate-300 leading-relaxed mb-1.5">
-            On-chip scratchpad has <strong id="spec-banks-count" class="text-emerald-300">8</strong> parallel 32-bit banks (<code class="text-amber-300">Bank = word_idx mod <span id="spec-banks-mod">8</span></code>).
-            Unpadded <code class="text-rose-300">local_tile[<span id="spec-tile-dim1">8</span>][<span id="spec-tile-dim2">8</span>]</code> causes column gathers to serialize on <strong>Bank 0 (94.12% conflict, 45.9 W/mm²)</strong>, heating Bank 0 to <strong>99.2°C</strong>.
+            On-chip scratchpad has <strong id="spec-banks-count" class="text-emerald-300">8</strong> parallel 32-bit banks (<code class="text-amber-300">Bank = word_idx mod <span id="spec-banks-mod">8</span></code>) monitored by the instrumented <code class="text-cyan-300">SramTile&lt;float, R, C&gt;</code> proxy.
+            Unpadded <code class="text-rose-300">SramTile&lt;float, <span id="spec-tile-dim1">8</span>, <span id="spec-tile-dim2">8</span>&gt;</code> causes all column-transpose lanes to collide on <strong>Bank 0</strong>.
           </p>
           <div class="bg-emerald-950/30 border border-emerald-500/30 rounded p-1.5 text-[10px] mono text-emerald-200">
-            <strong>Fix (+1 Padding):</strong> <code class="text-white">PADDED_STRIDE = TILE_DIM + 1</code> (<span id="spec-padded-val">9</span> floats, <code class="text-emerald-300">gcd(<span id="spec-gcd-a">9</span>, <span id="spec-gcd-b">8</span>) = 1</code>) → <strong>0.00% conflict</strong> &amp; <strong>62.2°C</strong>.
+            <strong>Coprime Rule:</strong> Choose column dimension <code class="text-white">COLS &gt; TILE_DIM</code> such that <code class="text-emerald-300">gcd(<span id="spec-gcd-a">9</span>, <span id="spec-gcd-b">8</span>) = 1</code> (<code class="text-white">SramTile&lt;float, <span id="spec-banks-mod2">8</span>, <span id="spec-padded-val">9</span>&gt;</code>) → <strong>0.00% conflict</strong>.
           </div>
         </div>
 
@@ -245,10 +248,10 @@
               <span class="text-rose-400 font-bold">#E-401 (Overrides Sec 4.2):</span> Unaligned DMA + <span id="errata-rsvd-label">Bit 7</span> assertion triggers <code class="text-amber-300">18.4 A/ns</code> PDN <code class="text-amber-300">di/dt</code> droop (<code class="text-rose-300">682.4 mV</code>). Requires compile-time <code class="text-emerald-300">static_assert</code> guard.
             </div>
             <div class="p-1.5 rounded bg-slate-950/90 border border-amber-500/30">
-              <span class="text-amber-400 font-bold">#E-402 (Overrides Sec 5.1):</span> L1 D-Cache snoop filter bug on Rev 4.2 silicon. <code class="text-cyan-300">BURST_16 (0x15)</code> is <strong>strictly forbidden</strong> unless preceded by <code class="text-emerald-300">hw_dmb()</code> + followed by <code class="text-emerald-300">hw_poll_status_volatile()</code>.
+              <span class="text-amber-400 font-bold">#E-402 (Supersedes Sec 5.1):</span> Hardware L1 snoop filter disabled on Rev 4.2 silicon. 16-beat burst DMA is <strong>strictly forbidden</strong> unless preceded by <code class="text-emerald-300">hw_dmb()</code> + followed by <code class="text-emerald-300">hw_poll_status_volatile()</code>.
             </div>
             <div class="p-1.5 rounded bg-slate-950/90 border border-purple-500/30">
-              <span class="text-purple-400 font-bold">#E-403 (Overrides Sec 6.4):</span> Power-of-two tile stride routes all column lanes to <code class="text-rose-300">Bank 0</code> (<code class="text-rose-300">45.9 W/mm²</code> sense-amp hotspot → <code class="text-rose-300">99.2°C</code> &amp; <code class="text-amber-300">WCET=49.85ms</code>). Requires coprime <code class="text-emerald-300">PADDED_STRIDE = TILE_DIM + 1</code> &amp; <code class="text-emerald-300">static_assert((PADDED_STRIDE % TILE_DIM) == 1)</code>.
+              <span class="text-purple-400 font-bold">#E-403 (Supersedes Sec 6.4):</span> Power-of-two tile stride routes all column lanes to <code class="text-rose-300">Bank 0</code>. Kernel must allocate scratchpad via <code class="text-cyan-300">SramTile&lt;float, ROWS, COLS&gt;</code> with <code class="text-emerald-300">gcd(COLS, NUM_BANKS) == 1</code>; bypassing <code class="text-cyan-300">SramTile</code> triggers <code class="text-rose-400">ERR_SRAM_TILE_BYPASS_DETECTED</code>.
             </div>
           </div>
         </div>
@@ -262,15 +265,15 @@
         </details>
       </div>
 
-      <!-- TAB 2: HardwareSpec IR & WaveformQA Event-Time JSON -->
+      <!-- TAB 2: HardwareSpec IR & CSV Event-Time JSON -->
       <div id="left-view-specir" class="hidden flex-1 overflow-y-auto p-3 space-y-2.5 select-text">
         <div class="bg-slate-950 border border-amber-500/30 rounded-lg p-2.5">
           <div class="flex items-center justify-between mb-1.5">
-            <span class="text-[11px] font-bold text-amber-300 mono">🧩 Typed HardwareSpec IR (SpecMap-IR/v3.0)</span>
+            <span class="text-[11px] font-bold text-amber-300 mono">🧩 Typed HardwareSpec IR (SiliconHeal-HardwareSpecIR/v3.1)</span>
             <span class="text-[9px] mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300">Cross-Page Grounded</span>
           </div>
           <div class="text-[10px] text-slate-400 mb-1.5">
-            Synthesized from Datasheet PDF + Section 9 Errata + SVG Netlist + Scope Telemetry. Drives compile-time <code class="text-emerald-300">static_assert</code> guards:
+            Parsed from Datasheet + Section 9 Errata + SVG Netlist + CSV Threshold Scanner. Drives compile-time <code class="text-emerald-300">static_assert</code> guards:
           </div>
           <div id="specir-guards-list" class="space-y-1 mb-2"></div>
           <pre id="specir-json-box" class="text-[10px] mono bg-slate-900 p-2 rounded border border-slate-800 text-cyan-200 overflow-x-auto max-h-48"></pre>
@@ -278,8 +281,8 @@
 
         <div class="bg-slate-950 border border-cyan-500/30 rounded-lg p-2.5">
           <div class="flex items-center justify-between mb-1.5">
-            <span class="text-[11px] font-bold text-cyan-300 mono">⏱️ WaveformQA Event-Time Telemetry JSON</span>
-            <span class="text-[9px] mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300">Timestamp-Aligned</span>
+            <span class="text-[11px] font-bold text-cyan-300 mono">⏱️ CSV Threshold-Scanned Event-Time Telemetry JSON</span>
+            <span class="text-[9px] mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300">Computed from CSV</span>
           </div>
           <div id="waveformqa-events-list" class="space-y-1.5"></div>
         </div>
@@ -313,7 +316,7 @@
       </div>
     </section>
 
-    <!-- CENTER COLUMN (5 cols): 6-Stage Hard Acceptance Gate + KernelPro Micro-Profiler + Patch Diff / Proof Bundle -->
+    <!-- CENTER COLUMN (5 cols): 6-Stage Hard Acceptance Gate + Hardware-Counter Micro-Profiler + Patch Diff / Evidence Bundle -->
     <section class="col-span-5 border-r border-slate-800 flex flex-col bg-slate-950 overflow-hidden">
 
       <!-- 6-STAGE HIERARCHICAL HARD ACCEPTANCE GATE BAR -->
@@ -321,7 +324,7 @@
         <div class="flex items-center justify-between mb-1.5">
           <span class="text-[10px] font-bold uppercase tracking-wider text-cyan-300 mono flex items-center gap-1.5">
             <span>🛡️ 6-Stage Hierarchical Hard Acceptance Gate</span>
-            <span class="text-slate-500">(Zero-Shortcut Verification Pipeline)</span>
+            <span class="text-slate-500">(SramTile Anti-Cheat Enforced)</span>
           </span>
           <span id="six-gate-summary-pill" class="px-2 py-0.5 text-[10px] font-bold rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 mono">
             0 / 6 GATES PASSED
@@ -353,10 +356,10 @@
 
         <p id="reasoning-trace" class="text-[10px] text-slate-300 leading-relaxed bg-slate-950/90 border border-slate-800 rounded p-2 mono whitespace-pre-line max-h-24 overflow-y-auto"></p>
 
-        <!-- KernelPro / Nsight Compute Semantic Micro-Profiler Line Diagnostics -->
+        <!-- Hardware-Counter Semantic Micro-Profiler Line Diagnostics -->
         <div id="micro-profiler-box" class="mt-1.5 bg-slate-950/95 border border-slate-800 rounded p-1.5">
           <div class="flex items-center justify-between text-[9px] mono text-slate-400 mb-1">
-            <span class="font-bold text-purple-300">🔬 KernelPro Semantic Micro-Profiler (Source Line ↔ Stride ↔ Wavefront Stall)</span>
+            <span class="font-bold text-purple-300">🔬 Hardware-Counter Micro-Profiler (SramTile Proxy ↔ Stride ↔ Bank Stall)</span>
             <span id="micro-profiler-Bottleneck" class="text-amber-300 font-semibold"></span>
           </div>
           <div id="micro-profiler-rows" class="space-y-1 max-h-20 overflow-y-auto"></div>
@@ -366,7 +369,7 @@
         <div id="citations-list" class="mt-1.5 flex flex-wrap gap-1"></div>
       </div>
 
-      <!-- Code / Visual Diff / Proof-Carrying Bundle Mode Bar -->
+      <!-- Code / Visual Diff / Verification Evidence Bundle Mode Bar -->
       <div class="px-3 py-1.5 border-b border-slate-800 bg-slate-900/90 flex items-center justify-between shrink-0">
         <div class="flex items-center gap-1">
           <button onclick="setCodeViewMode('diff_prev')" id="view-btn-diff_prev" class="px-2 py-1 rounded text-[10px] font-medium bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
@@ -376,7 +379,7 @@
             Cumulative Diff
           </button>
           <button onclick="setCodeViewMode('proof')" id="view-btn-proof" class="px-2 py-1 rounded text-[10px] font-medium text-slate-400 hover:text-slate-200">
-            📜 Proof-Carrying Bundle
+            📜 Verification Evidence Bundle
           </button>
           <button onclick="setCodeViewMode('source')" id="view-btn-source" class="px-2 py-1 rounded text-[10px] font-medium text-slate-400 hover:text-slate-200">
             Live C++ Editor
@@ -387,19 +390,19 @@
         </span>
       </div>
 
-      <!-- Diff / Source / Proof Bundle Content Area -->
+      <!-- Diff / Source / Verification Evidence Bundle Content Area -->
       <div id="code-display-container" class="flex-1 overflow-y-auto p-3 text-xs mono select-text"></div>
 
       <!-- Live Editor Action Footer (Shown in 'source' mode) -->
       <div id="custom-compile-bar" class="hidden px-3 py-2 border-t border-slate-800 bg-slate-900 flex items-center justify-between">
-        <span class="text-[11px] text-slate-400">Edit C++ kernel &amp; test against active <code class="text-cyan-300">-DHW_*</code> hardware constraints:</span>
+        <span class="text-[11px] text-slate-400">Edit C++ kernel &amp; test against active <code class="text-cyan-300">-DHW_*</code> &amp; <code class="text-emerald-300">SramTile</code> instrumentation:</span>
         <button onclick="compileAndRunCustomCode()" class="px-3 py-1 rounded bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-all">
           ⚡ Compile &amp; Run in g++ Sandbox
         </button>
       </div>
     </section>
 
-    <!-- RIGHT COLUMN (3 cols): Hardware Telemetry + WCET/Jitter + Causal Graph + 2D/3D Silicon Die Thermal Simulation -->
+    <!-- RIGHT COLUMN (3 cols): Hardware Telemetry + WCET/Jitter + Fault-Attribution Model + 2D/3D Silicon Die Thermal Simulation -->
     <section class="col-span-3 flex flex-col bg-slate-900/40 overflow-y-auto p-2.5 space-y-2.5">
 
       <!-- Status Banner -->
@@ -414,7 +417,7 @@
         <p id="tel-fault-detail" class="text-[10px] text-slate-300 mt-0.5 leading-snug"></p>
       </div>
 
-      <!-- Quantitative KPI Grid (6 Cards including Real-Time WCET & Jitter) -->
+      <!-- Quantitative KPI Grid (4 Cards including Real-Time WCET & Jitter) -->
       <div class="grid grid-cols-2 gap-1.5">
         <div class="bg-slate-900 border border-slate-800 rounded-lg p-2">
           <div class="flex items-center justify-between">
@@ -422,7 +425,7 @@
             <span class="text-[9px] mono text-slate-500">SLA &lt; 3.50ms</span>
           </div>
           <div class="flex items-baseline gap-1.5 mt-0.5">
-            <span id="kpi-latency" class="text-sm font-bold mono text-rose-400">46.51 ms</span>
+            <span id="kpi-latency" class="text-sm font-bold mono text-rose-400">42.76 ms</span>
             <span id="kpi-speedup" class="text-[9px] mono text-emerald-400 font-semibold"></span>
           </div>
         </div>
@@ -430,10 +433,10 @@
         <div class="bg-slate-900 border border-slate-800 rounded-lg p-2">
           <div class="flex items-center justify-between">
             <span class="text-[10px] text-slate-400">Real-Time WCET</span>
-            <span id="kpi-jitter" class="text-[9px] mono text-amber-300">Jitter ±342us</span>
+            <span id="kpi-jitter" class="text-[9px] mono text-amber-300">Jitter ±365us</span>
           </div>
           <div class="flex items-baseline gap-1.5 mt-0.5">
-            <span id="kpi-wcet" class="text-sm font-bold mono text-rose-400">49.85 ms</span>
+            <span id="kpi-wcet" class="text-sm font-bold mono text-rose-400">45.41 ms</span>
           </div>
         </div>
 
@@ -454,17 +457,17 @@
             <span id="kpi-banks-label" class="text-[9px] mono text-slate-500">8-Bank</span>
           </div>
           <div class="flex items-baseline gap-1.5 mt-0.5">
-            <span id="kpi-conflict" class="text-sm font-bold mono text-rose-400">94.12%</span>
+            <span id="kpi-conflict" class="text-sm font-bold mono text-rose-400">87.50%</span>
             <span id="kpi-crc" class="text-[9px] mono text-slate-400 truncate">CRC FAIL</span>
           </div>
         </div>
       </div>
 
-      <!-- PHYSICAL CAUSAL GRAPH SEPARATION CARD (Voltage Droop vs Thermal Hotspot) -->
+      <!-- FAULT-ATTRIBUTION MODEL CARD (Voltage Droop vs Thermal Hotspot) -->
       <div class="bg-slate-900 border border-slate-800 rounded-lg p-2 space-y-1.5">
         <div class="flex items-center justify-between">
-          <span class="text-[10px] font-bold uppercase tracking-wider text-amber-300 mono">⚡ Physical Causal Graph Separation</span>
-          <span class="text-[9px] mono text-slate-400">PDN di/dt vs Bank 0 Stall</span>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-amber-300 mono">⚡ Fault-Attribution Model</span>
+          <span class="text-[9px] mono text-slate-400" title="Derived analytically from runtime hardware counters">Counter-Driven Model</span>
         </div>
         <div class="p-1.5 rounded bg-slate-950 border border-slate-800 text-[10px] mono">
           <div class="flex items-center justify-between">
@@ -476,7 +479,7 @@
         <div class="p-1.5 rounded bg-slate-950 border border-slate-800 text-[10px] mono">
           <div class="flex items-center justify-between">
             <span class="text-amber-300 font-semibold">2. Thermal Hotspot (Bank 0):</span>
-            <span id="causal-therm-badge" class="text-rose-400 font-bold">97.7°C (45.9 W/mm²)</span>
+            <span id="causal-therm-badge" class="text-rose-400 font-bold">100.0°C (48.0 W/mm²)</span>
           </div>
           <div id="causal-therm-desc" class="text-[9px] text-slate-400 mt-0.5 leading-tight"></div>
         </div>
@@ -486,8 +489,8 @@
       <div class="bg-slate-900 border border-slate-800 rounded-lg p-2">
         <div class="flex items-center justify-between mb-1">
           <div>
-            <span class="text-[11px] font-bold text-white block">🔥 Silicon Die Thermal PDE Simulation</span>
-            <span class="text-[9px] text-slate-400 mono">8×8 Gauss-Seidel 2D Heat Diffusion (Steady-State)</span>
+            <span class="text-[11px] font-bold text-white block">🔥 2D Finite-Difference Die Thermal Model</span>
+            <span class="text-[9px] text-slate-400 mono">8×8 Steady-State Heat Diffusion from Bank Conflict Counters</span>
           </div>
           <div class="flex items-center gap-1 bg-slate-950 p-0.5 rounded border border-slate-800">
             <button onclick="setThermalMode('3d')" id="therm-btn-3d" class="px-1.5 py-0.5 text-[9px] rounded bg-amber-500/20 text-amber-300 font-semibold mono">3D Surface</button>
@@ -624,17 +627,32 @@
 
       document.getElementById('active-spec-pill').textContent =
         `SPEC: ${alignB}B Align | Bit ${rsvdBit} (${rsvdHex}) RSVD | ${banks}-Bank SRAM`;
+
+      const modePill = document.getElementById('synthesis-mode-pill');
+      if (modePill && appData) {
+        const modeStr = appData.mode || 'offline_constraint_solver_fallback';
+        if (String(modeStr).includes('live')) {
+          modePill.textContent = 'MODE: LIVE GEMINI API';
+          modePill.className = 'px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded-full mono';
+        } else {
+          modePill.textContent = 'MODE: OFFLINE CONSTRAINT-SOLVER FALLBACK';
+          modePill.className = 'px-2 py-0.5 text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded-full mono';
+        }
+      }
+
       document.getElementById('title-sec-4-2').textContent =
         `4.2.1 ${alignB}-Byte DMA Alignment & 4.2.2 DMA_CR Reserved Bit ${rsvdBit}`;
       document.getElementById('spec-align-txt').textContent = alignB;
       document.getElementById('spec-align-code').textContent = alignB;
       document.getElementById('spec-unaligned-err').textContent = `ERR_DMA_UNALIGNED_${alignB}B`;
-      document.getElementById('spec-rsvd-bit-col').textContent = `Bit ${rsvdBit} (${rsvdHex})`;
-      document.getElementById('errata-rsvd-label').textContent = `Bit ${rsvdBit} (${rsvdHex})`;
+      document.getElementById('spec-rsvd-bit-col').textContent = `Bit ${rsvdBit}`;
+      document.getElementById('errata-rsvd-label').textContent = `Bit ${rsvdBit}`;
 
       document.getElementById('spec-bank-badge').textContent = `${banks}-BANK INTERLEAVED SRAM`;
       document.getElementById('spec-banks-count').textContent = banks;
       document.getElementById('spec-banks-mod').textContent = banks;
+      const mod2El = document.getElementById('spec-banks-mod2');
+      if (mod2El) mod2El.textContent = banks;
       document.getElementById('spec-tile-dim1').textContent = banks;
       document.getElementById('spec-tile-dim2').textContent = banks;
       document.getElementById('spec-padded-val').textContent = padded;
@@ -748,7 +766,7 @@
       // Render 6-Stage Hierarchical Hard Acceptance Gates
       renderSixStageGates(stage.six_stage_gates);
 
-      // Render KernelPro Semantic Micro-Profiler
+      // Render Hardware-Counter Micro-Profiler
       renderMicroProfiler(stage.sandbox.semantic_micro_profile);
 
       // Stage header & reasoning
@@ -834,16 +852,16 @@
       }
 
       if (codeViewMode === 'proof') {
-        const bundle = appData.proof_carrying_bundle || {};
-        const ba = bundle.before_after_counter_proof || {};
+        const bundle = appData.verification_evidence_bundle || appData.proof_carrying_bundle || {};
+        const ba = bundle.before_after_counter_evidence || bundle.before_after_counter_proof || {};
         const b0 = ba.baseline_iter0 || {};
         const f3 = ba.final_iter3 || {};
         container.innerHTML = `
           <div class="space-y-2.5 text-[11px]">
             <div class="p-2.5 rounded bg-emerald-950/30 border border-emerald-500/40 flex items-center justify-between">
               <div>
-                <div class="font-bold text-emerald-300">📜 Proof-Carrying Patch Evidence Bundle (${escapeHtml(bundle.bundle_schema || 'SiliconHeal-ProofCarryingBundle/v3.0')})</div>
-                <div class="text-[10px] text-slate-300">Machine-Verifiable Cross-Modal Traceability: Datasheet + Section 9 Errata + SVG Netlist + WaveformQA + C++17 static_assert</div>
+                <div class="font-bold text-emerald-300">📜 Verification Evidence Bundle (${escapeHtml(bundle.bundle_schema || 'SiliconHeal-VerificationEvidenceBundle/v3.1')})</div>
+                <div class="text-[10px] text-slate-300">Cross-Modal Traceability: Datasheet + Section 9 Errata + SVG Netlist + CSV Scanner + SramTile&lt;T,R,C&gt; Counters</div>
               </div>
               <span class="px-2 py-0.5 rounded bg-emerald-500 text-slate-950 font-bold text-[10px]">6/6 GATES VERIFIED</span>
             </div>
@@ -855,14 +873,16 @@
                 <div>• Avg / WCET: <span class="text-rose-400">${b0.latency_ms} ms / ${b0.wcet_ms} ms (±${b0.jitter_us} us)</span></div>
                 <div>• Bank Conflict: <span class="text-rose-400">${b0.bank_conflict_rate_pct}%</span></div>
                 <div>• Peak Temp / VDD: <span class="text-rose-400">${b0.peak_die_temp_c}°C / ${b0.vdd_droop_mv} mV</span></div>
+                <div>• SramTile Reads/Writes: <span class="text-rose-400">${b0.sram_reads ?? 0} / ${b0.sram_writes ?? 0}</span></div>
                 <div>• CRC32: <span class="text-rose-400">${escapeHtml(b0.crc32)}</span></div>
               </div>
               <div class="p-2 rounded bg-slate-900 border border-emerald-500/30">
-                <div class="font-bold text-emerald-300 mb-1">After (Iter 3 Proof-Verified Kernel)</div>
+                <div class="font-bold text-emerald-300 mb-1">After (Iter 3 Verified Kernel)</div>
                 <div>• Status: <span class="text-emerald-400">${escapeHtml(f3.status)}</span></div>
                 <div>• Avg / WCET: <span class="text-emerald-400">${f3.latency_ms} ms / ${f3.wcet_ms} ms (±${f3.jitter_us} us)</span></div>
                 <div>• Bank Conflict: <span class="text-emerald-400">${f3.bank_conflict_rate_pct}%</span></div>
                 <div>• Peak Temp / VDD: <span class="text-emerald-400">${f3.peak_die_temp_c}°C / ${f3.vdd_droop_mv} mV</span></div>
+                <div>• SramTile Reads/Writes: <span class="text-emerald-400">${f3.sram_reads ?? 65536} / ${f3.sram_writes ?? 65536}</span></div>
                 <div>• CRC32: <span class="text-emerald-400">${escapeHtml(f3.crc32)} (100% Match)</span></div>
               </div>
             </div>
@@ -929,7 +949,11 @@
         latEl.textContent = `${tel.latency_ms.toFixed(2)} ms`;
         const isFast = tel.latency_ms <= tel.sla_target_ms;
         latEl.className = `text-sm font-bold mono ${isFast ? 'text-emerald-400' : 'text-amber-400'}`;
-        spdEl.textContent = isFast ? `18.9x Faster` : `> ${tel.sla_target_ms}ms`;
+        const baseLat = (appData && appData.stages && appData.stages[1] && appData.stages[1].sandbox && appData.stages[1].sandbox.telemetry)
+          ? appData.stages[1].sandbox.telemetry.latency_ms
+          : 42.76;
+        const speedupRatio = (baseLat / Math.max(0.01, tel.latency_ms)).toFixed(1);
+        spdEl.textContent = isFast ? `${speedupRatio}x Faster` : `> ${tel.sla_target_ms}ms`;
       }
 
       // Real-Time WCET & Jitter KPI
@@ -958,8 +982,8 @@
       crcEl.textContent = tel.crc_passed ? `CRC OK (${tel.crc_actual})` : `CRC FAIL`;
       crcEl.className = `text-[9px] mono truncate ${tel.crc_passed ? 'text-emerald-400' : 'text-rose-400'}`;
 
-      // Physical Causal Graph Separation Card
-      const cg = tel.causal_graph || {};
+      // Fault-Attribution Model Card
+      const cg = tel.fault_attribution || tel.causal_graph || {};
       const vddCause = cg.voltage_droop_cause || {};
       const thmCause = cg.thermal_hotspot_cause || {};
       const vddBadge = document.getElementById('causal-vdd-badge');
@@ -1110,7 +1134,7 @@
       ctx.font = 'bold 10px JetBrains Mono';
       ctx.fillStyle = peakTemp > 80 ? '#fda4af' : '#6ee7b7';
       const label = peakTemp > 80
-        ? `⚠ HOTSPOT: ${peakTemp.toFixed(1)}°C (Bank 0 Sense-Amp 45.9 W/mm²)`
+        ? `⚠ HOTSPOT: ${peakTemp.toFixed(1)}°C (Bank 0 Conflict Concentration)`
         : `✔ UNIFORM THERMAL DISTRIBUTION: ${peakTemp.toFixed(1)}°C`;
       ctx.fillText(label, 10, H - 8);
     }
@@ -1142,10 +1166,12 @@
         });
         const data = await res.json();
         if (data.ok) {
+          appData.mode = data.mode;
           appData.spec_config = data.spec_config;
           appData.manual_markdown = data.manual_markdown;
           appData.multimodal = data.multimodal;
           appData.hardware_spec_ir = data.hardware_spec_ir;
+          appData.verification_evidence_bundle = data.verification_evidence_bundle;
           appData.proof_carrying_bundle = data.proof_carrying_bundle;
           appData.stages = data.stages;
           appData.compiler_retry_events = data.compiler_retry_events || [];

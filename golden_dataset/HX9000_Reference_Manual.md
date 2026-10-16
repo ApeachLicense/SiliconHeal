@@ -1,92 +1,82 @@
 # HX-9000 Edge AI Tensor & DMA Coprocessor Reference Manual
 **Document ID:** HX9000-RM-REV4.2  
 **Architecture:** ARMv8-M / Custom AXI4-Stream Neural Tile Engine  
-**Clock Domain:** 400 MHz Core / 200 MHz AXI4 Bus  
+**Clock Domain:** 400 MHz Core / 200 MHz AXI4 Bus (64-bit Data Width)  
 
 ---
 
 ## Section 3. Memory Map & MMIO Register Summary (Page 9)
 
-The HX-9000 DMA and Local SRAM Controller are mapped to the peripheral non-cacheable address space starting at base address `0x4002_1000`.
+The HX-9000 DMA and Local SRAM Controller are mapped to the peripheral address space starting at base address `0x4002_1000`.
 
 | Offset | Register Name | Access | Reset Value | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `0x00` | `DMA_CR` | R/W | `0x0000_0000` | DMA Control & Burst Configuration Register |
-| `0x04` | `DMA_SR` | RO (Volatile) | `0x0000_0000` | DMA Status & Hardware Fault Code Register |
+| `0x04` | `DMA_SR` | RO | `0x0000_0000` | DMA Status & Hardware Fault Code Register |
 | `0x08` | `DMA_SRC_ADDR` | R/W | `0x0000_0000` | System DRAM Source Physical Address |
-| `0x0C` | `DMA_DST_ADDR` | R/W | `0x2000_0000` | Local TCM SRAM Destination Address |
-| `0x10` | `DMA_LEN` | R/W | `0x0000_0000` | Transfer Length in Bytes (Multiple of 64) |
+| `0x0C` | `DMA_DST_ADDR` | R/W | `0x2000_0000` | Local Staging Destination Physical Address |
+| `0x10` | `DMA_LEN` | R/W | `0x0000_0000` | Transfer Length in Bytes |
 
 ---
 
-## Section 4.2 DMA Alignment & Control Register Constraints (Page 14)
+## Section 4.2 DMA Alignment & Control Register Specification (Page 14)
 
-### 4.2.1 64-Byte Cache-Line Address Alignment Rule [CRITICAL]
-Both `DMA_SRC_ADDR` and `DMA_DST_ADDR` **MUST be aligned to a 64-byte boundary** (`address % 64 == 0`, i.e., `address & 0x3F == 0`).
-* **Hardware Fault Behavior:** Initiating a DMA transfer with an unaligned source or destination pointer immediately raises `ERR_DMA_UNALIGNED_64B` (`DMA_SR[2] = 1`) and aborts the kernel execution.
-* **C/C++ Implementation Requirement:** Buffers passed to the DMA engine must be allocated or declared with `alignas(64)`.
+### 4.2.1 DMA Address Alignment Specification
+Both `DMA_SRC_ADDR` and `DMA_DST_ADDR` must be aligned to a **64-byte boundary** (`address % 64 == 0`).
+* **Fault Behavior:** Initiating a DMA transfer with an unaligned source or destination address raises `ERR_DMA_UNALIGNED` (`DMA_SR[2] = 1`) and aborts transfer execution.
 
-### 4.2.2 `DMA_CR` (Offset `0x00`) Bitfield Specification
-| Bits | Name | Description |
+### 4.2.2 `DMA_CR` (Offset `0x00`) Bitfield Table
+Software constructs the `DMA_CR` control word by combining the required bit positions below:
+
+| Bit Position | Field Name | Value & Hardware Function |
 | :--- | :--- | :--- |
-| `31:8` | `RESERVED` | Reserved. Read as 0, must be written as 0. |
-| **`7`** | **`RSVD_MBZ`** | **Reserved Must-Be-Zero (Factory Debug Bus Lock).**<br>**WARNING:** Writing `1` to Bit 7 (`0x80`) locks the AXI4 arbiter and triggers an immediate `ERR_AXI_BUS_DEADLOCK` (`DMA_SR[3] = 1`) hardware fault. |
-| `6:5` | `PRIORITY` | Channel priority (`00` = Low, `01` = Medium, `10` = High). |
-| **`4`** | **`BURST_16`** | **16-Beat AXI4 Burst Mode Enable.**<br>`0` = Single-beat transfer (high bus overhead).<br>`1` = 16-beat burst mode (`0x10`), reducing DMA transfer overhead by 8.2x. |
-| `2` | `DIR_MEM2SRAM`| `1` = DRAM to Local SRAM transfer (`0x04`). |
-| `0` | `EN` | `1` = Enable and trigger DMA transfer (`0x01`). |
-
-> **Valid Configuration Example:**  
-> Standard single-beat enable: `DMA_CR = 0x05` (`DIR_MEM2SRAM | EN`).  
-> Optimized 16-beat burst enable: `DMA_CR = 0x15` (`BURST_16 | DIR_MEM2SRAM | EN`).  
-> **INVALID:** `DMA_CR = 0x85` sets Bit 7 (`RSVD_MBZ`) and causes an immediate hardware fault!
+| `31:8` | `RESERVED` | Reserved. Must be written as `0`. |
+| **`7`** | **`RSVD_MBZ`** | **Reserved Must-Be-Zero (Internal Test Mode).** See Section 9 Errata `#E-401`. |
+| `6:5` | `PRIORITY` | Channel arbitration priority (`00` = Standard). |
+| **`4`** | **`BURST_16`** | **AXI4 Burst Length Select.**<br>`0` = Single-beat mode (1 beat per bus grant; 13 core cycles arbitration overhead per beat).<br>`1` = 16-beat pipelined burst mode (16 beats per bus grant; 8 core cycles setup per burst). |
+| `3` | `CIRC_MODE` | `0` = Linear one-shot transfer; `1` = Circular ring buffer. |
+| **`2`** | **`DIR_MEM2SRAM`**| **Transfer Direction.**<br>`1` = System DRAM to Local Staging Buffer.<br>`0` = Local Staging Buffer to System DRAM. |
+| `1` | `IRQ_EN` | `0` = Disable completion IRQ (use status polling); `1` = Enable IRQ. |
+| **`0`** | **`EN`** | **Channel Enable.**<br>`1` = Initiate DMA transfer; `0` = Channel disabled. |
 
 ---
 
-## Section 5.1 Cache Coherency & MMIO Polling Protocol (Page 27)
+## Section 5.1 Nominal Cache Coherency & Status Polling (Page 27)
 
-### 5.1.1 Mandatory Data Memory Barrier (`DMB`) Before DMA Trigger
-The HX-9000 DMA engine reads directly from physical DRAM, bypassing the CPU's L1 Data Cache.
-* If the CPU writes or modifies input tensor data prior to setting `DMA_CR.EN`, the dirty cache lines remain in L1 cache unless explicitly flushed/ordered.
-* **Hardware Rule:** Software **MUST invoke `hw_dmb()` (Data Memory Barrier / Cache CleanFence) immediately before writing to `DMA_CR`**. Omitting `hw_dmb()` results in the DMA engine reading stale/uninitialized memory, causing silent **Output CRC32 Data Corruption**.
+> **NOTE:** See **Section 9 (Silicon Errata `#E-402`, Page 88)** for critical Rev 4.2 silicon limitations that override this section.
 
-### 5.1.2 `volatile` Qualification on `DMA_SR` Polling
-The status register `DMA_SR` (Offset `0x04`) is updated asynchronously by the DMA state machine (`Bit 0: DONE`, `Bit 1: BUSY`).
-* Polling `DMA_SR` without `volatile` semantics (`hw_read_status_volatile()`) allows optimizing compilers (`-O2`/`-O3`) to hoist the read out of the loop or read a cached register state before transfer completion, leading to corrupted partial tile reads.
+### 5.1.1 Hardware Cache Snooping (Nominal Specification)
+In the nominal HX-9000 architecture, the AXI4 DMA master interfaces with an L1 Data Cache snoop filter designed to maintain coherency during memory-to-scratchpad transfers.
+* **Explicit Barrier API:** The HAL provides `hw_dmb()` to force an explicit Data Memory Barrier and L1 cache clean prior to `hw_trigger_dma(...)`.
+
+### 5.1.2 Status Register (`DMA_SR`) Polling APIs
+The HAL provides two status read helpers for `DMA_SR` (`Bit 0: DONE`):
+* `hw_poll_status_cached()`: Standard non-volatile register read.
+* `hw_poll_status_volatile()`: Strictly ordered `volatile` MMIO register read.
 
 ---
 
-## Section 6.4 8-Bank Interleaved Local SRAM & Bank Conflict Avoidance (Page 41)
+## Section 6.4 Interleaved Local SRAM Architecture (Page 41)
 
-### 6.4.1 8-Bank Interleaved Memory Architecture
-The 64 KB Local Tightly-Coupled SRAM is partitioned into **8 parallel 32-bit (4-byte) banks** (`Bank 0` through `Bank 7`).
-For any byte offset `addr`, the hardware bank index is determined by:
-$$\text{Bank Index} = \left\lfloor \frac{\text{addr}}{4} \right\rfloor \bmod 8$$
+### 6.4.1 8-Bank Word-Interleaved Scratchpad
+The Local Tightly-Coupled Scratchpad SRAM (`SramTile<float, Rows, Cols>`) is partitioned into **8 parallel 32-bit (4-byte word) banks** (`Bank 0` through `Bank 7`).
+For any 2D tile element `(r, c)` stored in a tile container with column dimension `Cols`, its linear word offset is `w = r * Cols + c`, and its hardware bank index is:
+$$\text{Bank\_ID}(r, c) = (r \cdot \text{Cols} + c) \bmod 8$$
 
-Consecutive 32-bit floats (`4 bytes` apart) map to consecutive banks (`0, 1, 2, 3, 4, 5, 6, 7`), enabling 8 parallel accesses per cycle when each lane hits a distinct bank.
-
-### 6.4.2 The 32-Byte Stride Bank Conflict Trap
-When executing a $8 \times 8$ (or $N \times 8$ tile) matrix transpose or column-major reduction on `float` (`4 bytes`):
-* Row stride is $8 \times 4\text{ bytes} = 32\text{ bytes}$.
-* Since $32 / 4 = 8$, accessing column elements `tile[r][c]` across rows `r = 0..7` addresses byte offsets `0, 32, 64, 96, ...`, which **ALL map to the exact same SRAM bank**:
-  $$\left(\frac{32 \cdot r + 4 \cdot c}{4}\right) \bmod 8 = (8r + c) \bmod 8 = c$$
-* **Performance Impact:** All 8 parallel lanes collide on Bank $c$ (**94.12% Bank Conflict Rate**), serializing memory access and stalling the pipeline by **12 cycles per conflict way**.
-
-### 6.4.3 Recommended Hardware Optimization: +1 Element Row Padding
-To achieve **0% Bank Conflict** during column-wise or transpose tile access:
-1. Pad the local SRAM tile declaration by **+1 float per row**: `float local_tile[TILE_DIM][TILE_DIM + 1]` (stride becomes $9 \times 4 = 36\text{ bytes}$).
-2. Because $\gcd(9, 8) = 1$, consecutive rows `r = 0..7` in the same column `c` map to banks `(9r + c) mod 8`, hitting all 8 banks without a single collision!
-3. Combined with `DMA_CR = 0x15` (`BURST_16`), kernel latency improves from **46.51 ms to 2.46 ms (18.91x speedup)**.
+### 6.4.2 Vector Crossbar Access Pattern
+During an 8-lane vector operation:
+* **Row-Wise Access (`r` fixed, `c = 0..7`):** Word offsets increment by `1`, mapping lanes to `(r * Cols + 0..7) mod 8`, which accesses all 8 banks in parallel (1 wavefront cycle).
+* **Column-Wise Gather (`c` fixed, `r = 0..7`):** Word offsets increment by `Cols`. The bank accessed by lane `r` is `(r * Cols + c) mod 8`.
 
 ---
 
 ## Section 9. Silicon Errata Sheet — Rev 4.2 Mandatory Cross-Page Overrides (Page 88)
 
 > **CRITICAL SILICON ADVISORY (Cross-Page Specification Override):**  
-> In Rev 4.2 silicon steppings, three hardware errata (`#E-401`, `#E-402`, `#E-403`) **override and supersede** the nominal programming guidelines in Sections 4.2, 5.1, and 6.4. Any firmware or kernel synthesis agent MUST apply the following workarounds and compile-time `static_assert` proofs.
+> In Rev 4.2 silicon steppings, three hardware defects (`#E-401`, `#E-402`, `#E-403`) **override and supersede** the nominal behaviors described in Sections 4.2, 5.1, and 6.4.
 
-| Errata ID | Overrides Section | Hardware Defect & Electrical/Thermal Root Cause | Mandatory Software Workaround & `static_assert` Guard |
+| Errata ID | Overrides Section | Silicon Defect & Observed Symptom | Architectural Constraint Required |
 | :--- | :--- | :--- | :--- |
-| **`#E-401`** | **Overrides Sec 4.2.1 & 4.2.2 (Page 14)** | **AXI4 Arbiter Latch-Up & PDN $di/dt$ Voltage Droop:** Unaligned `DMA_DST_ADDR` or asserting `DMA_CR[RSVD_MBZ]` triggers an unrecoverable arbiter retry oscillation on net `NET_DMA_CR_MBZ_TRAP`, inducing a `18.4 A/ns` $di/dt$ spike across package inductance and dropping `VDD_CORE` to `682.4 mV` at `t=142.50us`. | Enforce `alignas(HW_DMA_ALIGN_BYTES)` at base offset `[0]`, clear `DMA_CR_RSVD_MBZ`, enable `DMA_CR_BURST16` (`0x15`), and prove alignment via `static_assert`. |
-| **`#E-402`** | **Overrides Sec 5.1.1 & 5.1.2 (Page 27)** | **L1 D-Cache Snoop Filter Bypass Hazard:** Hardware snoop controller on net `NET_DMB_SNOOP_INV` fails to auto-clean dirty CPU L1 lines (`56 lines` at `t=418.00us`) during non-coherent DMA reads, while `-O2` loop hoisting caches stale `DMA_SR` status bits. | Execute explicit `hw_dmb()` immediately before `hw_trigger_dma()` AND poll completion exclusively via `hw_poll_status_volatile()`. |
-| **`#E-403`** | **Overrides Sec 6.4.1 & 6.4.2 (Page 41)** | **Crossbar Wavefront Serialization & Bank 0 Thermal Runaway:** Power-of-two tile row stride (`TILE_DIM` floats) causes 100% column-gather serialization on `NET_SRAM_XBAR_ARB` (`Bank 0`), elevating local sense-amplifier power density to `45.9 W/mm²` (`97.7°C ~ 99.2°C` hotspot at `t=1120.50us`) and violating WCET/Jitter bounds. | Override nominal `TILE_DIM` stride with coprime `PADDED_STRIDE = TILE_DIM + 1` and enforce `static_assert((PADDED_STRIDE % TILE_DIM) == 1, "Errata #E-403")`. |
+| **`#E-401`** | **Overrides Sec 4.2 (Page 14)** | **AXI4 Write-Response State Machine Lockup:** Asserting `DMA_CR` Reserved Bit `7` (`RSVD_MBZ`) or supplying an address not aligned to `64` bytes locks the AXI4 arbiter (`AWVALID=1, AWREADY=0`), causing high-frequency retry current spikes on `VDD_CORE`. Additionally, leaving `BURST_16=0` degrades DMA throughput by `6x` due to per-beat bus re-arbitration. | The staging buffer pointer must start at a `64`-byte aligned base address, `DMA_CR` must have `RSVD_MBZ` cleared (`0`), and `EN`, `DIR_MEM2SRAM`, and `BURST_16` must be asserted (`1`) for production throughput. |
+| **`#E-402`** | **Overrides Sec 5.1 (Page 27)** | **Hardware L1 Snoop Filter Disabled in Rev 4.2:** Contrary to Section 5.1.1, the automatic hardware snoop filter is non-functional in Rev 4.2 silicon due to a clock-domain crossing race on `NET_DMB_SNOOP_INV`. Starting DMA without a manual barrier reads stale DRAM lines, and non-volatile status polling (`hw_poll_status_cached()`) returns stale completion state under `-O2`. | Software **must ignore** the nominal auto-snoop assumption in Section 5.1: explicitly call `hw_dmb()` immediately before `hw_trigger_dma()`, and replace `hw_poll_status_cached()` with `hw_poll_status_volatile()`. |
+| **`#E-403`** | **Overrides Sec 6.4 (Page 41)** | **Crossbar Bank-Conflict Serialization & Sense-Amp Heating:** When `SramTile<float, Rows, Cols>` uses a column width `Cols` that shares a common factor with the bank count `N_BANKS = 8` ($\gcd(\text{Cols}, 8) > 1$), column-wise gather (`r = 0..7`) maps multiple lanes to the same bank, stalling the crossbar and concentrating switching power in `Bank 0`. | The second template dimension `Cols` of `SramTile<float, Rows, Cols>` must satisfy $\text{Cols} \ge \text{TILE\_DIM}$ and $\gcd(\text{Cols}, 8) = 1$ (coprime to the number of SRAM banks) so that `(r * Cols + c) mod 8` is a bijection across all 8 banks. |
