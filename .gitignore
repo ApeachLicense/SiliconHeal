@@ -1,0 +1,12 @@
+# Sandbox build artifacts
+backend/.sandbox_build/
+*.exe
+*.o
+*.out
+
+# Python cache
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
