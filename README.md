@@ -2,8 +2,8 @@
 
 > **Track 2: Gemini 4 Argon in Hard Tech · `Gemini 4 Argon (thinking_level="high")` + `Antigravity Sandbox (antigravity-preview-09-2026)` + Deterministic Spec Solver Hybrid**
 >
-> - 🌐 **Live Google Cloud Run Deployment (`h2gdm-hack26icn-2668`)**: **[https://siliconheal-917940456935.us-central1.run.app](https://siliconheal-917940456935.us-central1.run.app)**
 > - 💻 **Public GitHub Repository**: **[https://github.com/ApeachLicense/SiliconHeal](https://github.com/ApeachLicense/SiliconHeal)**
+> - ☁️ **Cloud-Native Verification**: Containerized with native `g++ -O2 -std=c++17` (`Dockerfile`) for **Google Cloud Run** deployment.
 
 **SiliconHeal** leverages **Gemini 4 Argon (`thinking_level="high"`)**'s 1M-token unified multimodal context and **Antigravity Sandbox (`antigravity-preview-09-2026`)** verification loops to ingest a heterogeneous hardware bundle—the **HX-9000 Reference Manual (including Page 88 Section 9 Silicon Errata Rev 4.2)**, **AXI4 Bus Timing & PCB Schematic (`AXI_Bus_Timing_Schematic.svg`)**, and a **2,500-row Mixed-Signal Oscilloscope Telemetry Dump (`oscilloscope_telemetry_dump.csv`)**—alongside a buggy, bottlenecked C++ tensor kernel (`kernel_buggy.cpp`).
 
@@ -64,7 +64,7 @@ Instead of relying on kernel self-reporting or hardcoded patch files, SiliconHea
 
 4. **`Gemini 4 Argon (thinking_level="high")` + Deterministic Spec Solver Hybrid & Cross-Platform `g++` Self-Healing ([`backend/agent_loop.py`](backend/agent_loop.py) & [`backend/sandbox_runner.py`](backend/sandbox_runner.py))**
    - Subprocess `g++` calls inside the **Antigravity Sandbox (`antigravity-preview-09-2026`)** enforce `LC_ALL=C` and `LANG=C`, and `repair_cpp_syntax_errors()` normalizes Unicode curly quotes (`‘’“”` -> `'`) before parsing `g++` `stderr` diagnostics, ensuring identical behavior on Linux and Windows.
-   - Supports **Gemini 4 Argon (`gemini-4-argon`, `thinking_level="high"`)** via Vertex AI (`h2gdm-hack26icn-2668`) / Google AI Studio (`GEMINI_API_KEY`) paired with a deterministic `HardwareSpec IR` constraint solver (`Gemini 4 Argon (thinking_level="high") + Deterministic Spec Solver Hybrid`).
+   - Supports **Gemini 4 Argon (`gemini-4-argon`, `thinking_level="high"`)** via Vertex AI / Google AI Studio (`GEMINI_API_KEY`) paired with a deterministic `HardwareSpec IR` constraint solver (`Gemini 4 Argon (thinking_level="high") + Deterministic Spec Solver Hybrid`).
 
 ---
 
@@ -77,6 +77,6 @@ python test_audit.py
 # 2. Start the HTTP server (binds 0.0.0.0:$PORT, default port 8765)
 python backend/server.py
 
-# 3. Deploy to Google Cloud Run (Hackathon GCP Project: h2gdm-hack26icn-2668)
-gcloud run deploy siliconheal --source . --project h2gdm-hack26icn-2668 --region us-central1 --allow-unauthenticated
+# 3. Deploy to Google Cloud Run (replace $GCP_PROJECT_ID with your project ID)
+gcloud run deploy siliconheal --source . --project $GCP_PROJECT_ID --region us-central1 --allow-unauthenticated
 ```

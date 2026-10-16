@@ -104,9 +104,14 @@
         </button>
       </div>
 
-      <button onclick="runAutoHealPlaybook()" id="auto-heal-btn" class="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition-all">
+      <button onclick="runAutoHealPlaybook()" id="auto-heal-btn" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition-all">
         <span id="auto-heal-icon">▶</span>
         <span id="auto-heal-text">Replay Closed-Loop</span>
+      </button>
+
+      <button onclick="toggleGuidedDemoTour()" id="guided-demo-btn" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 hover:from-amber-300 hover:to-rose-400 text-slate-950 font-extrabold text-xs shadow-lg shadow-amber-500/25 flex items-center gap-1.5 transition-all">
+        <span id="guided-demo-icon">🎬</span>
+        <span id="guided-demo-text">Auto-Demo (Subtitles)</span>
       </button>
     </div>
   </header>
@@ -1230,7 +1235,245 @@
       }, 1100);
     }
 
+    // ============================================================================
+    // BROADCAST-GRADE ENGLISH SUBTITLE OVERLAY & AUTOMATED 2-MINUTE DEMO DIRECTOR
+    // ============================================================================
+    let demoTourActive = false;
+    let demoTourPaused = false;
+    let demoSceneIdx = 0;
+    let demoTickTimer = null;
+    let demoSceneElapsedMs = 0;
+
+    const DEMO_SCENES = [
+      {
+        durationMs: 14000,
+        tag: 'SCENE 1/8 · PROBLEM & 1M MULTIMODAL INGESTION',
+        title: 'Cross-Page Silicon Errata Contradiction (Page 27 vs. Page 88)',
+        subtitle: 'SiliconHeal uses Gemini 4 Argon (thinking_level="high") to ingest the HX-9000 Reference Manual, AXI4 Schematic SVG, and 2,500-row Oscilloscope CSV in one unified context. Notice the cross-page contradiction: Page 27 (Sec 5.1) claims hardware L1 cache auto-snoop is active, but Page 88 (Sec 9 Errata #E-402) disables the snoop filter on Rev 4.2 silicon!',
+        action: async () => {
+          // Ensure default 64B / Bit 7 / 8-Bank spec is loaded
+          if (appData && appData.spec_config && appData.spec_config.num_banks !== 8) {
+            document.getElementById('mut-align').value = '64';
+            document.getElementById('mut-rsvd').value = '7';
+            document.getElementById('mut-banks').value = '8';
+            document.getElementById('mut-syntax-bug').checked = false;
+            await initDashboard();
+          }
+          switchLeftTab('datasheet');
+          setCodeViewMode('diff_prev');
+          selectStage(0);
+          const sec9 = document.getElementById('sec-9-errata');
+          if (sec9) sec9.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      },
+      {
+        durationMs: 15000,
+        tag: 'SCENE 2/8 · TYPED HARDWARESPEC IR & CSV THRESHOLD SCANNER',
+        title: 'Formal HardwareSpec IR + Compile-Time static_assert + 2,500-Row Scope Trace',
+        subtitle: 'Instead of hardcoded answers, SiliconHeal parses register bit positions into a typed HardwareSpec IR with compile-time C++17 static_assert guards, cross-references the AXI4 PCB Schematic SVG, and scans all 2,500 oscilloscope rows to pinpoint exact bus-lock and thermal anomaly windows.',
+        action: () => {
+          switchLeftTab('specir');
+          setTimeout(() => { if (demoTourActive && demoSceneIdx === 1) switchLeftTab('schematic'); }, 5000);
+          setTimeout(() => { if (demoTourActive && demoSceneIdx === 1) switchLeftTab('csv'); }, 10000);
+        }
+      },
+      {
+        durationMs: 14000,
+        tag: 'SCENE 3/8 · SANDBOX ITERATION 0 (0/6 GATES PASSED)',
+        title: 'Baseline Hardware Fault: Unaligned DMA (+1) & Reserved Bit 7 (DMA_CR=0x85)',
+        subtitle: 'Inside the Antigravity Sandbox (native g++ -O2), Iteration 0 fails with HARDWARE_FAULT (0/6 gates): DMA_CR=0x85 asserts forbidden Bit 7 (RSVD_MBZ) on an unaligned address, locking AXI_WREADY=0 and triggering a 682.6 mV PDN di/dt voltage droop (18.4 A/ns).',
+        action: () => {
+          switchLeftTab('datasheet');
+          setCodeViewMode('diff_prev');
+          selectStage(0);
+        }
+      },
+      {
+        durationMs: 14000,
+        tag: 'SCENE 4/8 · SANDBOX ITERATION 1 → ITERATION 2 (1/6 → 3/6 GATES)',
+        title: 'Resolving DMA Bus Lock & Fixing Stale L1 Cache via Errata #E-402 (hw_dmb)',
+        subtitle: 'Iteration 1 applies alignas(64) and clears Bit 7 (DMA_CR=0x05), resolving the bus lock (42.76 ms, 1/6 gates) but failing CRC32 (12.5%) due to stale L1 cache lines. Iteration 2 enforces Errata #E-402 by inserting hw_dmb() + volatile polling—achieving 100% CRC32 accuracy (0x9DD11DC5, 3/6 gates)!',
+        action: () => {
+          selectStage(1);
+          setTimeout(() => { if (demoTourActive && demoSceneIdx === 3) selectStage(2); }, 6500);
+        }
+      },
+      {
+        durationMs: 16000,
+        tag: 'SCENE 5/8 · SANDBOX ITERATION 3 (6/6 GATES · 16.57x SPEEDUP)',
+        title: 'Coprime SramTile<float, 8, 9> Padding + Synthesized BURST_16 (0x15)',
+        subtitle: 'In Iteration 2, unpadded 8×8 tiles caused an 87.50% 8-Way Bank 0 conflict and a 100.0°C thermal hotspot. In Iteration 3, the agent derives BURST_16 (0x15) from register bits {4,2,0} and applies coprime padding SramTile<float, 8, 9> (gcd(9,8)=1)—cutting bank conflicts to 0.00%, die temp to 62.2°C, and latency from 42.76 ms to 2.58 ms (16.57x speedup, 6/6 gates)!',
+        action: () => {
+          selectStage(3);
+          setThermalMode('3d');
+          setTimeout(() => { if (demoTourActive && demoSceneIdx === 4) setThermalMode('2d'); }, 8000);
+          setTimeout(() => { if (demoTourActive && demoSceneIdx === 4) setThermalMode('3d'); }, 12500);
+        }
+      },
+      {
+        durationMs: 17000,
+        tag: 'SCENE 6/8 · LIVE SPEC MUTATION (128B / BIT 6 / 16-BANK) & g++ SELF-HEALING',
+        title: 'Dynamic Datasheet Mutation + Injected C++ Syntax Fault Auto-Repair',
+        subtitle: 'To prove zero pre-baked patches, we mutate the hardware spec live to 128-Byte Align, Bit 6 RSVD, and 16-Bank SRAM while injecting a missing semicolon bug. Watch the yellow banner: the sandbox catches g++ stderr, repairs the syntax error, rejects old 64B code via static_assert, and synthesizes alignas(128) + SramTile<float, 16, 17> (gcd(17,16)=1)!',
+        action: async () => {
+          document.getElementById('mut-align').value = '128';
+          document.getElementById('mut-rsvd').value = '6';
+          document.getElementById('mut-banks').value = '16';
+          document.getElementById('mut-syntax-bug').checked = true;
+          await triggerMutateAndHeal();
+        }
+      },
+      {
+        durationMs: 14000,
+        tag: 'SCENE 7/8 · MUTATED 16-BANK VERIFICATION & EVIDENCE BUNDLE',
+        title: '2.21 ms Latency & 0.00% Conflict Across All 16 SRAM Banks (6/6 Gates)',
+        subtitle: 'On the mutated 16-Bank architecture, SramTile<float, 16, 17> (68B stride) distributes column accesses evenly across all 16 banks (0.00% conflict, 2.21 ms avg / 2.26 ms WCET). The Verification Evidence Bundle records full cross-modal traceability and separates measured runtime counters from analytical thermal/PDN models.',
+        action: () => {
+          selectStage(3);
+          setCodeViewMode('proof');
+        }
+      },
+      {
+        durationMs: 14000,
+        tag: 'SCENE 8/8 · HARNESS-ENFORCED SramTile<T,R,C> ANTI-CHEAT DEFENSE',
+        title: 'Zero Self-Reporting: C++ Proxy Template Blocks Raw-Array Bypass',
+        subtitle: 'Unlike mock sandboxes, our C++17 harness intercepts all 65,536 scratchpad reads and writes via the SramTile<T, Rows, Cols> proxy template. Any adversarial kernel attempting to bypass SramTile with raw C arrays is immediately blocked at Gate 1 with ERR_SRAM_TILE_BYPASS_DETECTED. Thank you for watching SiliconHeal!',
+        action: () => {
+          setCodeViewMode('source');
+        }
+      }
+    ];
+
+    function toggleGuidedDemoTour() {
+      if (demoTourActive) {
+        stopGuidedDemoTour();
+      } else {
+        startGuidedDemoTour();
+      }
+    }
+
+    function startGuidedDemoTour() {
+      demoTourActive = true;
+      demoTourPaused = false;
+      demoSceneIdx = 0;
+      demoSceneElapsedMs = 0;
+
+      const bar = document.getElementById('subtitle-overlay-bar');
+      bar.classList.remove('hidden');
+
+      const btnText = document.getElementById('guided-demo-text');
+      btnText.textContent = 'Stop Auto-Demo';
+
+      runDemoScene(0);
+
+      if (demoTickTimer) clearInterval(demoTickTimer);
+      demoTickTimer = setInterval(() => {
+        if (!demoTourActive || demoTourPaused) return;
+        demoSceneElapsedMs += 200;
+        const scene = DEMO_SCENES[demoSceneIdx];
+        const pct = Math.min(100, (demoSceneElapsedMs / scene.durationMs) * 100);
+        document.getElementById('subtitle-progress-fill').style.width = `${pct}%`;
+
+        if (demoSceneElapsedMs >= scene.durationMs) {
+          if (demoSceneIdx + 1 < DEMO_SCENES.length) {
+            runDemoScene(demoSceneIdx + 1);
+          } else {
+            demoTourPaused = true;
+            document.getElementById('subtitle-pause-btn').textContent = '↻ Replay Tour';
+          }
+        }
+      }, 200);
+    }
+
+    function stopGuidedDemoTour() {
+      demoTourActive = false;
+      demoTourPaused = false;
+      if (demoTickTimer) {
+        clearInterval(demoTickTimer);
+        demoTickTimer = null;
+      }
+      document.getElementById('subtitle-overlay-bar').classList.add('hidden');
+      document.getElementById('guided-demo-text').textContent = 'Auto-Demo (Subtitles)';
+    }
+
+    function runDemoScene(idx) {
+      if (idx < 0 || idx >= DEMO_SCENES.length) return;
+      demoSceneIdx = idx;
+      demoSceneElapsedMs = 0;
+      const scene = DEMO_SCENES[idx];
+
+      document.getElementById('subtitle-scene-tag').textContent = scene.tag;
+      document.getElementById('subtitle-scene-title').textContent = scene.title;
+      document.getElementById('subtitle-scene-text').textContent = scene.subtitle;
+      document.getElementById('subtitle-progress-fill').style.width = '0%';
+      document.getElementById('subtitle-pause-btn').textContent = demoTourPaused ? '▶ Resume' : '⏸ Pause';
+
+      if (scene.action) {
+        scene.action();
+      }
+    }
+
+    function prevDemoScene() {
+      const target = Math.max(0, demoSceneIdx - 1);
+      runDemoScene(target);
+    }
+
+    function nextDemoScene() {
+      if (demoSceneIdx + 1 < DEMO_SCENES.length) {
+        runDemoScene(demoSceneIdx + 1);
+      } else {
+        runDemoScene(0);
+      }
+    }
+
+    function togglePauseDemoScene() {
+      if (demoSceneIdx === DEMO_SCENES.length - 1 && demoSceneElapsedMs >= DEMO_SCENES[demoSceneIdx].durationMs) {
+        demoTourPaused = false;
+        runDemoScene(0);
+        return;
+      }
+      demoTourPaused = !demoTourPaused;
+      document.getElementById('subtitle-pause-btn').textContent = demoTourPaused ? '▶ Resume' : '⏸ Pause';
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (!demoTourActive) return;
+      if (e.target && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT')) return;
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        nextDemoScene();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        prevDemoScene();
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        togglePauseDemoScene();
+      }
+    });
+
     window.addEventListener('DOMContentLoaded', initDashboard);
   </script>
+
+  <!-- BROADCAST-GRADE ENGLISH SUBTITLE OVERLAY BAR (FOR EFFORTLESS SCREEN RECORDING) -->
+  <div id="subtitle-overlay-bar" class="hidden fixed bottom-3 left-1/2 -translate-x-1/2 z-50 w-[94%] max-w-6xl bg-slate-950/95 backdrop-blur-md border-2 border-amber-400/70 rounded-xl shadow-2xl shadow-black/90 px-5 py-3 select-none">
+    <div class="flex items-center justify-between gap-3 mb-1">
+      <div class="flex items-center gap-2">
+        <span id="subtitle-scene-tag" class="px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-extrabold text-[11px] mono tracking-wider">
+          SCENE 1/8
+        </span>
+        <span id="subtitle-scene-title" class="text-sm font-bold text-amber-300 mono"></span>
+      </div>
+      <div class="flex items-center gap-1.5 text-[11px] mono">
+        <button onclick="prevDemoScene()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">◀ Prev</button>
+        <button onclick="togglePauseDemoScene()" id="subtitle-pause-btn" class="px-2.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-semibold">⏸ Pause</button>
+        <button onclick="nextDemoScene()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">Next ▶</button>
+        <button onclick="stopGuidedDemoTour()" class="ml-1 px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40">✕</button>
+      </div>
+    </div>
+    <p id="subtitle-scene-text" class="text-[15px] leading-snug font-medium text-white tracking-tight"></p>
+    <div class="w-full h-1 bg-slate-800 rounded-full overflow-hidden mt-2">
+      <div id="subtitle-progress-fill" class="h-full bg-gradient-to-r from-amber-400 via-emerald-400 to-cyan-400 transition-all duration-200" style="width: 0%"></div>
+    </div>
+  </div>
 </body>
 </html>
