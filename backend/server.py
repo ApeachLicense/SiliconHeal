@@ -16,11 +16,28 @@ if str(BACKEND_DIR) not in sys.path:
 
 from agent_loop import (
     SILICON_HEAL_SYSTEM_PROMPT,
-    STAGE_METADATA,
     build_stage_result,
-    call_gemini_live_patch,
+    run_autonomous_closed_loop,
+)
+from multimodal_context import (
+    DEFAULT_SPEC,
+    ensure_oscilloscope_csv,
+    get_multimodal_summary,
 )
 from sandbox_runner import compile_and_run_kernel, compute_unified_diff
+
+# Cache the initial default run for fast /api/init startup while still computed from real g++ closed loop
+_CACHED_DEFAULT_LOOP = None
+
+
+def get_default_loop_result(force_refresh: bool = False) -> dict:
+    global _CACHED_DEFAULT_LOOP
+    if _CACHED_DEFAULT_LOOP is None or force_refresh:
+        _CACHED_DEFAULT_LOOP = run_autonomous_closed_loop(
+            spec_config=dict(DEFAULT_SPEC),
+            use_live_api=False,
+        )
+    return _CACHED_DEFAULT_LOOP
 
 
 class SiliconHealHandler(BaseHTTPRequestHandler):
@@ -53,16 +70,56 @@ class SiliconHealHandler(BaseHTTPRequestHandler):
             self.wfile.write(content)
             return
 
+        if parsed.path == "/api/schematic.svg":
+            svg_file = GOLDEN_DIR / "AXI_Bus_Timing_Schematic.svg"
+            if not svg_file.exists():
+                self.send_error(404, "AXI_Bus_Timing_Schematic.svg not found")
+                return
+            content = svg_file.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "image/svg+xml; charset=utf-8")
+            self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+            return
+
+        if parsed.path == "/api/telemetry.csv":
+            csv_file = ensure_oscilloscope_csv(2500)
+            content = csv_file.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+            return
+
         if parsed.path == "/api/init":
-            manual_md = (GOLDEN_DIR / "HX9000_Reference_Manual.md").read_text(encoding="utf-8")
-            stages = [build_stage_result(i) for i in range(len(STAGE_METADATA))]
+            loop_res = get_default_loop_result()
+            svg_text = (GOLDEN_DIR / "AXI_Bus_Timing_Schematic.svg").read_text(encoding="utf-8")
+            csv_path = ensure_oscilloscope_csv(2500)
+            csv_lines = csv_path.read_text(encoding="utf-8").splitlines()
+            # Provide header + anomaly window rows around t=142.40us, t=418.00us, t=1120.50us
+            preview_rows = [csv_lines[0]]
+            for line in csv_lines[1:]:
+                if any(tag in line for tag in ("AXI_BUS_DEADLOCK", "CACHE_COHERENCY_STALE_READ", "SRAM_BANK0_THERMAL_HOTSPOT")):
+                    preview_rows.append(line)
+            # Also add first 25 normal/transitional rows
+            preview_rows.extend(csv_lines[280:300])
             self._send_json(
                 {
                     "project": "SiliconHeal: Autonomous Hardware-Spec & Kernel Self-Healing Agent",
                     "engine": "Gemini 4 Argon (thinking_level=\"high\") + Antigravity Native g++ Sandbox",
-                    "manual_markdown": manual_md,
+                    "mode": loop_res["mode"],
+                    "spec_config": loop_res["spec_config"],
+                    "manual_markdown": loop_res["manual_markdown"],
+                    "multimodal": loop_res["multimodal"],
+                    "schematic_svg": svg_text,
+                    "csv_preview": "\n".join(preview_rows[:45]),
+                    "csv_total_rows": len(csv_lines) - 1,
                     "system_prompt": SILICON_HEAL_SYSTEM_PROMPT,
-                    "stages": stages,
+                    "stages": loop_res["stages"],
+                    "compiler_retry_events": loop_res["compiler_retry_events"],
+                    "all_passed": loop_res["all_passed"],
                 }
             )
             return
@@ -80,14 +137,61 @@ class SiliconHealHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/run-stage":
             iteration = int(payload.get("iteration", 0))
-            stage_data = build_stage_result(iteration)
+            spec_cfg = payload.get("spec_config") or dict(DEFAULT_SPEC)
+            stage_data = build_stage_result(iteration, spec_config=spec_cfg)
             self._send_json({"ok": True, "stage": stage_data})
+            return
+
+        if parsed.path == "/api/mutate-and-heal":
+            raw_spec = payload.get("spec_config") or {}
+            spec_cfg = {
+                "dma_align_bytes": int(raw_spec.get("dma_align_bytes", 64)),
+                "rsvd_mbz_bit": int(raw_spec.get("rsvd_mbz_bit", 7)),
+                "num_banks": int(raw_spec.get("num_banks", 8)),
+                "sla_target_ms": float(raw_spec.get("sla_target_ms", 3.50)),
+            }
+            inject_syntax_bug = bool(payload.get("inject_syntax_bug", False))
+            use_live_api = bool(payload.get("use_live_api", False))
+            api_key = (payload.get("api_key") or os.environ.get("GEMINI_API_KEY") or "").strip()
+            model_name = payload.get("model_name") or "gemini-2.5-pro"
+
+            initial_code = payload.get("initial_code")
+            if not initial_code:
+                initial_code = (GOLDEN_DIR / "kernel_buggy.cpp").read_text(encoding="utf-8")
+
+            if inject_syntax_bug:
+                # Inject a deliberate C++ syntax fault (missing semicolon) to test self-healing compiler retry loop
+                initial_code = initial_code.replace(
+                    "const uint32_t dma_ctrl_flags = 0xC5;",
+                    "const uint32_t dma_ctrl_flags = 0xC5 // [INJECTED SYNTAX BUG: missing semicolon]",
+                )
+
+            loop_res = run_autonomous_closed_loop(
+                spec_config=spec_cfg,
+                initial_code=initial_code,
+                use_live_api=use_live_api,
+                api_key=api_key,
+                model_name=model_name,
+            )
+            self._send_json(
+                {
+                    "ok": True,
+                    "mode": loop_res["mode"],
+                    "spec_config": loop_res["spec_config"],
+                    "manual_markdown": loop_res["manual_markdown"],
+                    "multimodal": loop_res["multimodal"],
+                    "stages": loop_res["stages"],
+                    "compiler_retry_events": loop_res["compiler_retry_events"],
+                    "all_passed": loop_res["all_passed"],
+                }
+            )
             return
 
         if parsed.path == "/api/compile-custom":
             custom_code = payload.get("code", "")
+            spec_cfg = payload.get("spec_config") or dict(DEFAULT_SPEC)
             baseline_code = (GOLDEN_DIR / "kernel_buggy.cpp").read_text(encoding="utf-8")
-            sandbox_res = compile_and_run_kernel(custom_code, step_id="custom")
+            sandbox_res = compile_and_run_kernel(custom_code, step_id="custom", spec_config=spec_cfg)
             diff_vs_baseline = compute_unified_diff(
                 baseline_code,
                 custom_code,
@@ -97,45 +201,11 @@ class SiliconHealHandler(BaseHTTPRequestHandler):
             self._send_json(
                 {
                     "ok": True,
+                    "spec_config": spec_cfg,
                     "sandbox": sandbox_res,
                     "diff_vs_baseline": diff_vs_baseline,
                 }
             )
-            return
-
-        if parsed.path == "/api/live-gemini-heal":
-            api_key = (payload.get("api_key") or os.environ.get("GEMINI_API_KEY") or "").strip()
-            model_name = payload.get("model_name") or "gemini-2.5-pro"
-            current_code = payload.get("code") or (GOLDEN_DIR / "kernel_buggy.cpp").read_text(encoding="utf-8")
-            manual_md = (GOLDEN_DIR / "HX9000_Reference_Manual.md").read_text(encoding="utf-8")
-            cur_sandbox = compile_and_run_kernel(current_code, step_id="live_in")
-
-            if api_key:
-                llm_res = call_gemini_live_patch(
-                    api_key=api_key,
-                    model_name=model_name,
-                    manual_text=manual_md,
-                    current_code=current_code,
-                    telemetry=cur_sandbox["telemetry"],
-                )
-                if llm_res and "patched_code" in llm_res:
-                    patched_code = llm_res["patched_code"]
-                    new_sandbox = compile_and_run_kernel(patched_code, step_id="live_out")
-                    diff_text = compute_unified_diff(current_code, patched_code)
-                    self._send_json(
-                        {
-                            "ok": True,
-                            "mode": "LIVE_GEMINI_API",
-                            "llm_response": llm_res,
-                            "sandbox": new_sandbox,
-                            "diff": diff_text,
-                        }
-                    )
-                    return
-
-            # Fallback to deterministic stage 3 compiled live in g++ sandbox
-            stage3 = build_stage_result(3)
-            self._send_json({"ok": True, "mode": "SANDBOX_VERIFIED_FALLBACK", "stage": stage3})
             return
 
         self.send_error(404, "POST endpoint not found")

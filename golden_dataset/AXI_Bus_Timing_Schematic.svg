@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" width="100%" height="100%" style="background:#060a14;font-family:'JetBrains Mono',monospace;">
+  <defs>
+    <linearGradient id="FaultGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ef4444" stop-opacity="0.32"/>
+      <stop offset="100%" stop-color="#991b1b" stop-opacity="0.12"/>
+    </linearGradient>
+    <linearGradient id="AmberGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#92400e" stop-opacity="0.10"/>
+    </linearGradient>
+    <linearGradient id="CyanGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#1e3a8a" stop-opacity="0.12"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Title Bar -->
+  <rect x="12" y="10" width="936" height="34" rx="6" fill="#0f172a" stroke="#1e293b"/>
+  <text x="24" y="31" fill="#38bdf8" font-size="13" font-weight="bold">SCHEMATIC &amp; TIMING CAPTURE // HX-9000 AXI4-DMA &amp; INTERLEAVED SRAM CROSSBAR (REV 4.2)</text>
+  <text x="735" y="31" fill="#94a3b8" font-size="11">PROBE: KEYSIGHT-MSO-400MHz</text>
+
+  <!-- ===================================================================== -->
+  <!-- TOP SECTION: HARDWARE BLOCK SCHEMATIC                                 -->
+  <!-- ===================================================================== -->
+  <!-- CPU & L1 D-Cache Block -->
+  <rect x="20" y="56" width="205" height="150" rx="8" fill="url(#AmberGrad)" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="32" y="78" fill="#fbbf24" font-size="12" font-weight="bold">ARMv8-M CORE + L1 D-CACHE</text>
+  <text x="32" y="98" fill="#e2e8f0" font-size="10">L1 Line Size: 64B / 128B</text>
+  <rect x="32" y="108" width="180" height="42" rx="4" fill="#090d16" stroke="#b45309"/>
+  <text x="40" y="125" fill="#fcd34d" font-size="10">WARN @ t=418.0us (Sec 5.1.1):</text>
+  <text x="40" y="141" fill="#fda4af" font-size="10">56 Dirty Lines Bypassed w/o DMB!</text>
+  <text x="32" y="172" fill="#94a3b8" font-size="10">Signal: CPU_DMB_FENCE_N</text>
+  <text x="32" y="190" fill="#38bdf8" font-size="10">MMIO: 0x4002_1004 (DMA_SR)</text>
+
+  <!-- Arrow CPU -> AXI -->
+  <line x1="225" y1="125" x2="275" y2="125" stroke="#38bdf8" stroke-width="2"/>
+  <polygon points="275,121 283,125 275,129" fill="#38bdf8"/>
+  <text x="230" y="116" fill="#7dd3fc" font-size="9">AXI4M</text>
+
+  <!-- AXI4 Interconnect & DMA_CR Block -->
+  <rect x="285" y="56" width="265" height="150" rx="8" fill="url(#FaultGrad)" stroke="#ef4444" stroke-width="1.5"/>
+  <text x="298" y="78" fill="#f87171" font-size="12" font-weight="bold">AXI4 ARBITER &amp; DMA ENGINE</text>
+  <text x="298" y="96" fill="#e2e8f0" font-size="10">MMIO Base: 0x4002_1000 (DMA_CR)</text>
+  <rect x="298" y="105" width="238" height="50" rx="4" fill="#090d16" stroke="#dc2626"/>
+  <text x="306" y="122" fill="#fca5a5" font-size="10" font-weight="bold">TRAP @ t=142.4us (Sec 4.2.2):</text>
+  <text x="306" y="136" fill="#fecaca" font-size="10">DMA_CR[RSVD_MBZ]=1 -&gt; WREADY=0 Lock</text>
+  <text x="306" y="149" fill="#fde047" font-size="10">VDD_CORE Droop: 850mV -&gt; 682.4mV!</text>
+  <text x="298" y="174" fill="#cbd5e1" font-size="10">Align Check: (SRC|DST) &amp; (ALIGN-1) == 0</text>
+  <text x="298" y="191" fill="#34d399" font-size="10">Bit 4: BURST_16 (16-Beat AXI4 Stream)</text>
+
+  <!-- Arrow AXI -> SRAM Crossbar -->
+  <line x1="550" y1="125" x2="605" y2="125" stroke="#f87171" stroke-width="2"/>
+  <polygon points="605,121 613,125 605,129" fill="#f87171"/>
+  <text x="554" y="116" fill="#fca5a5" font-size="9">128b BUS</text>
+
+  <!-- N-Bank Interleaved TCM SRAM Crossbar -->
+  <rect x="615" y="56" width="325" height="150" rx="8" fill="url(#CyanGrad)" stroke="#06b6d4" stroke-width="1.5"/>
+  <text x="628" y="78" fill="#67e8f9" font-size="12" font-weight="bold">N-BANK INTERLEAVED SRAM CROSSBAR</text>
+  <text x="628" y="96" fill="#e2e8f0" font-size="10">Bank = (word_addr) mod N_BANKS (8 or 16)</text>
+  <rect x="628" y="105" width="298" height="52" rx="4" fill="#090d16" stroke="#0891b2"/>
+  <text x="636" y="122" fill="#fca5a5" font-size="10" font-weight="bold">HOTSPOT @ t=1120.5us (Sec 6.4.2):</text>
+  <text x="636" y="136" fill="#cbd5e1" font-size="10">Stride = N*4B -&gt; All lanes collide on Bank 0</text>
+  <text x="636" y="150" fill="#6ee7b7" font-size="10">Fix: Pad +1 Float -&gt; gcd(N+1, N) = 1 (0% Stall)</text>
+  <text x="628" y="175" fill="#fbbf24" font-size="10">Thermistor: DIE_BANK0_SENSE = 98.4°C (Unpadded)</text>
+  <text x="628" y="191" fill="#34d399" font-size="10">Target Post-Patch Temp: &lt; 65.0°C (Balanced)</text>
+
+  <!-- ===================================================================== -->
+  <!-- BOTTOM SECTION: OSCILLOSCOPE & LOGIC ANALYZER WAVEFORMS               -->
+  <!-- ===================================================================== -->
+  <rect x="20" y="220" width="920" height="304" rx="8" fill="#080d1a" stroke="#1e293b" stroke-width="1.5"/>
+  <text x="34" y="242" fill="#94a3b8" font-size="11" font-weight="bold">MIXED-SIGNAL OSCILLOSCOPE CAPTURE (2,500 SAMPLES · golden_dataset/oscilloscope_telemetry_dump.csv)</text>
+
+  <!-- Time Vertical Markers -->
+  <!-- Marker 1: t=142.4us -->
+  <line x1="265" y1="252" x2="265" y2="508" stroke="#ef4444" stroke-dasharray="4,3" stroke-width="1.5"/>
+  <text x="270" y="264" fill="#f87171" font-size="10" font-weight="bold">t=142.4us: RSVD_MBZ Deadlock</text>
+
+  <!-- Marker 2: t=418.0us -->
+  <line x1="515" y1="252" x2="515" y2="508" stroke="#f59e0b" stroke-dasharray="4,3" stroke-width="1.5"/>
+  <text x="520" y="264" fill="#fbbf24" font-size="10" font-weight="bold">t=418.0us: Stale L1 Cache (No DMB)</text>
+
+  <!-- Marker 3: t=1120.5us -->
+  <line x1="755" y1="252" x2="755" y2="508" stroke="#ec4899" stroke-dasharray="4,3" stroke-width="1.5"/>
+  <text x="760" y="264" fill="#f472b6" font-size="10" font-weight="bold">t=1120.5us: Bank 0 98.4°C Hotspot</text>
+
+  <!-- Signal 1: AXI_WVALID & AXI_WREADY -->
+  <text x="34" y="292" fill="#38bdf8" font-size="11">AXI_WVALID</text>
+  <polyline points="145,296 245,296 245,276 910,276" fill="none" stroke="#38bdf8" stroke-width="2"/>
+
+  <text x="34" y="332" fill="#f87171" font-size="11">AXI_WREADY</text>
+  <polyline points="145,316 265,316 265,336 460,336 460,316 910,316" fill="none" stroke="#ef4444" stroke-width="2"/>
+  <text x="280" y="331" fill="#fca5a5" font-size="9">STUCK LOW (ARB LOCK)</text>
+
+  <!-- Signal 2: CPU_DMB_FENCE & L1_DIRTY_LINES -->
+  <text x="34" y="375" fill="#fbbf24" font-size="11">L1_DIRTY_CNT</text>
+  <polyline points="145,378 490,378 515,354 660,354 660,378 910,378" fill="none" stroke="#f59e0b" stroke-width="2"/>
+  <text x="525" y="369" fill="#fde68a" font-size="9">56 DIRTY CACHE LINES UNFLUSHED</text>
+
+  <!-- Signal 3: VDD_CORE (mV) Analog Waveform -->
+  <text x="34" y="425" fill="#a78bfa" font-size="11">VDD_CORE (mV)</text>
+  <polyline points="145,412 255,412 265,445 310,442 350,415 740,415 755,432 850,430 910,412" fill="none" stroke="#a78bfa" stroke-width="2"/>
+  <text x="272" y="456" fill="#c4b5fd" font-size="9">682.4 mV DROOP</text>
+
+  <!-- Signal 4: DIE_BANK0_TEMP (°C) Analog Waveform -->
+  <text x="34" y="485" fill="#fb7185" font-size="11">BANK0_TEMP</text>
+  <polyline points="145,492 600,488 700,475 755,455 860,452 910,452" fill="none" stroke="#fb7185" stroke-width="2.5"/>
+  <text x="762" y="472" fill="#fda4af" font-size="10" font-weight="bold">PEAK 98.4°C (8-WAY BANK STALL)</text>
+</svg>
