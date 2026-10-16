@@ -1,6 +1,9 @@
 # SiliconHeal: Autonomous Hardware-Spec & Silicon Errata Kernel Optimization Agent
 
 > **Track 2: Gemini 4 Argon in Hard Tech · `Gemini 4 Argon (thinking_level="high")` + `Antigravity Sandbox (antigravity-preview-09-2026)` + Deterministic Spec Solver Hybrid**
+>
+> - 🌐 **Live Google Cloud Run Deployment (`h2gdm-hack26icn-2668`)**: **[https://siliconheal-917940456935.us-central1.run.app](https://siliconheal-917940456935.us-central1.run.app)**
+> - 💻 **Public GitHub Repository**: **[https://github.com/ApeachLicense/SiliconHeal](https://github.com/ApeachLicense/SiliconHeal)**
 
 **SiliconHeal** leverages **Gemini 4 Argon (`thinking_level="high"`)**'s 1M-token unified multimodal context and **Antigravity Sandbox (`antigravity-preview-09-2026`)** verification loops to ingest a heterogeneous hardware bundle—the **HX-9000 Reference Manual (including Page 88 Section 9 Silicon Errata Rev 4.2)**, **AXI4 Bus Timing & PCB Schematic (`AXI_Bus_Timing_Schematic.svg`)**, and a **2,500-row Mixed-Signal Oscilloscope Telemetry Dump (`oscilloscope_telemetry_dump.csv`)**—alongside a buggy, bottlenecked C++ tensor kernel (`kernel_buggy.cpp`).
 
